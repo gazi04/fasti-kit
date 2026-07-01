@@ -9,4 +9,10 @@ dependencies = [
     "fastapi>=0.138.2",
     "pydantic>=2.13.4",
     "sqlalchemy>=2.0.51",
+    "uvicorn>=0.49.0",
 ]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+

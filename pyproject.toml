@@ -15,6 +15,16 @@ dependencies = [
     "asyncpg>=0.31.0",
 ]
 
+[project.scripts]
+create-domain = "scripts.create_domain:main"
+create-entity = "scripts.create_entity:main"
+create-model = "scripts.create_model:main"
+create-repository = "scripts.create_repository:main"
+create-service = "scripts.create_service:main"
+create-schema = "scripts.create_schema:main"
+create-route = "scripts.create_route:main"
+create-all = "scripts.create_all:main"
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
@@ -23,3 +33,10 @@ venv = ".venv"
 dev = [
     "pyright>=1.1.411",
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["core*", "user*", "scripts*"]
+

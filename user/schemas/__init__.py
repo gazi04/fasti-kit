@@ -1,3 +1,3 @@
-from .user_schema import UserCreate, UserRead
+from .user_schema import CreateUserRequest, GetUserRequest
 
-__all__ = ['UserCreate', 'UserRead']
+__all__ = ['CreateUserRequest', 'GetUserRequest']

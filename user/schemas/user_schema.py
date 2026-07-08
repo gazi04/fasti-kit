@@ -1,12 +1,10 @@
-import uuid
-
 from pydantic import BaseModel
 
 
-class UserCreate(BaseModel):
+class CreateUserRequest(BaseModel):
+    name: str
     email: str
     password: str
 
-class UserRead(BaseModel):
-    id: uuid.UUID
+class GetUserRequest(BaseModel):
     email: str

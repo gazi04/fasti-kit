@@ -14,4 +14,4 @@ class UserRepository:
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:
-        return User(id=model.id, email=model.email, full_name=model.full_name, password_hash=model.password_hash, is_active=model.is_active, create_at=model.created_at, updated_at=model.updated_at)
+        return User(id=model.id, email=model.email, full_name=model.full_name, password_hash=model.password_hash, is_active=model.is_active, created_at=model.created_at, updated_at=model.updated_at)

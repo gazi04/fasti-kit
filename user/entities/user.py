@@ -9,6 +9,6 @@ class User:
     email: Optional[str]
     full_name: Optional[str]
     password_hash: Optional[str]
-    is_active: Optional[is_active]
+    is_active: Optional[bool]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]

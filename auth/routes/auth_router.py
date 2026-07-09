@@ -1,18 +1,20 @@
 from typing import AsyncGenerator
 
 from authx import TokenPayload
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from auth.dependencies import auth
 from auth.schemas.auth_schema import LoginRequest, LoginResponse
 from auth.services.security_service import SecurityService
+from core.limiter import limiter
 from core.database import get_db
 from user.repositories.user_repository import UserRepository
 
 auth_router = APIRouter(prefix='/auth', tags=['Auth'])
 
 @auth_router.post('/login')
-async def login(data: LoginRequest, response: Response, db: AsyncGenerator = Depends(get_db)) -> LoginResponse:
+@limiter.limit('5/minute')
+async def login(data: LoginRequest, request: Request, response: Response, db: AsyncGenerator = Depends(get_db)) -> LoginResponse:
     user = await UserRepository(db).get_by_email(data.email)
 
     if user is None or not SecurityService.check_password(data.password, user.password_hash):

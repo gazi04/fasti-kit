@@ -1,7 +1,7 @@
 from typing import AsyncGenerator
 
 from authx import TokenPayload
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from auth.dependencies import auth
 from auth.schemas.auth_schema import LoginRequest, LoginResponse
@@ -12,7 +12,7 @@ from user.repositories.user_repository import UserRepository
 auth_router = APIRouter(prefix='/auth', tags=['Auth'])
 
 @auth_router.post('/login')
-async def login(data: LoginRequest, response: Response, db: AsyncGenerator = Depends(get_db)):
+async def login(data: LoginRequest, response: Response, db: AsyncGenerator = Depends(get_db)) -> LoginResponse:
     user = await UserRepository(db).get_by_email(data.email)
 
     if user is None or not SecurityService.check_password(data.password, user.password_hash):
@@ -32,12 +32,12 @@ async def protected(payload: TokenPayload = Depends(auth.token_required(type='ac
 
 
 @auth_router.post('/refresh')
-async def refresh(payload: TokenPayload = Depends(auth.token_required(type='refresh', locations=['cookies']))):
+async def refresh(payload: TokenPayload = Depends(auth.token_required(type='refresh', locations=['cookies']))) -> LoginResponse:
     new_access_token = auth.create_access_token(uid=payload.sub)
     return LoginResponse(access_token=new_access_token)
 
 
 @auth_router.post('/logout')
-def logout(response: Response):
+def logout(response: Response) -> dict:
     auth.unset_refresh_cookies(response)
     return {'message': 'Logged out'}

@@ -9,7 +9,7 @@ from alembic import context
 from core.setting import get_settings
 from core.database import Base
 
-import user.models  # noqa: F401  (registers models on Base.metadata for autogenerate)
+import core.models # noqa: F401  (registers models on Base.metadata for autogenerate)
 
 
 settings = get_settings()

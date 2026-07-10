@@ -1,5 +1,7 @@
-from authx import AuthX, AuthXConfig
+from authx import AuthX, AuthXConfig, TokenPayload
 
+from auth.repositories.revoked_token_repository import RevokedTokenRepository
+from core.database import AsyncSessionLocal
 from core.setting import get_settings
 
 settings = get_settings()
@@ -14,3 +16,10 @@ config = AuthXConfig(
 )
 
 auth = AuthX(config=config)
+
+async def is_token_revoked(token: str) -> bool:
+    payload = TokenPayload.decode(token, key=settings.jwt_secret_key, algorithms=['HS256'], verify=False)
+    async with AsyncSessionLocal() as db:
+        return await RevokedTokenRepository(db).exists(payload.jti)
+
+auth.set_callback_token_blocklist(is_token_revoked)

@@ -1,12 +1,12 @@
 from typing import AsyncGenerator
 
-from authx import JWTDecodeError, TokenPayload
+from authx import TokenPayload
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from auth.dependencies import auth
-from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.schemas.auth_schema import LoginRequest, LoginResponse
 from auth.services.security_service import SecurityService
+from auth.services.token_service import TokenService
 from core.limiter import limiter
 from core.database import get_db
 from user.repositories.user_repository import UserRepository
@@ -42,17 +42,6 @@ async def refresh(payload: TokenPayload = Depends(auth.token_required(type='refr
 
 @auth_router.post('/logout')
 async def logout(request: Request, response: Response, payload: TokenPayload = Depends(auth.token_required(type='access', locations=['headers'])), db: AsyncGenerator = Depends(get_db)) -> dict:
-    repo = RevokedTokenRepository(db)
-    await repo.add(payload.jti, payload.expiry_datetime)
-
-    refresh_token = request.cookies.get(auth.config.JWT_REFRESH_COOKIE_NAME)
-    
-    if refresh_token:
-        try:
-            refresh_payload = TokenPayload.decode(refresh_token, key=auth.config.JWT_SECRET_KEY, algorithms=[auth.config.JWT_ALGORITHM], verify=False)
-            await repo.add(refresh_payload.jti, refresh_payload.expiry_datetime)
-        except JWTDecodeError:
-            pass
-
+    await TokenService.revoke_tokens(request, payload, db)
     auth.unset_refresh_cookies(response)
     return {'message': 'Logged out'}

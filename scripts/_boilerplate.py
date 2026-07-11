@@ -1,16 +1,29 @@
 import re
 from pathlib import Path
 
-_CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+# Boundary between the last capital of an acronym run and the Capitalized word that
+# follows it, e.g. "HTTPServer" -> boundary lands before the "S" in "Server".
+_ACRONYM_BOUNDARY = re.compile(r"(?<=[A-Z])(?=[A-Z][a-z])")
+# Boundary between a lowercase letter/digit and the uppercase letter that follows it,
+# e.g. "userProfile" -> boundary before "P".
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
 
 def to_snake_case(name: str) -> str:
     normalized = name.replace("-", "_").replace(" ", "_")
-    return _CAMEL_BOUNDARY.sub("_", normalized).lower().strip("_")
+    normalized = _ACRONYM_BOUNDARY.sub("_", normalized)
+    normalized = _CAMEL_BOUNDARY.sub("_", normalized)
+    return normalized.lower().strip("_")
 
 
 def to_pascal_case(name: str) -> str:
     return "".join(part.capitalize() for part in to_snake_case(name).split("_"))
+
+
+def pluralize(word: str) -> str:
+    # Naive English pluralization (+s only). Irregular plurals (e.g. "category" ->
+    # "categorys") are out of scope - hand-fix __tablename__ for those.
+    return word if word.endswith("s") else f"{word}s"
 
 
 def write_new_file(path: Path, content: str) -> None:

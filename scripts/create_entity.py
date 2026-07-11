@@ -4,12 +4,17 @@ from pathlib import Path
 from scripts._boilerplate import to_pascal_case, to_snake_case, update_init, write_new_file
 
 TEMPLATE = '''from dataclasses import dataclass
+from datetime import datetime
+import uuid
 
 
 @dataclass
 class {class_name}:
-    # TODO: add fields
-    pass
+    id: uuid.UUID
+    # TODO: add domain-specific fields here (e.g. name: str, description: str)
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
 '''
 
 

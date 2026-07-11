@@ -1,5 +1,6 @@
 import argparse
 
+from scripts.create_domain import create_domain
 from scripts.create_entity import create_entity
 from scripts.create_model import create_model
 from scripts.create_repository import create_repository
@@ -9,6 +10,7 @@ from scripts.create_service import create_service
 
 
 def create_all(domain: str, name: str) -> None:
+    create_domain(domain)
     create_entity(domain, name)
     create_model(domain, name)
     create_repository(domain, name)

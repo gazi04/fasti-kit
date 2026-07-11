@@ -2,9 +2,10 @@ from typing import AsyncGenerator, Optional
 from uuid import UUID
 
 from authx import TokenPayload
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from auth.dependencies import auth
+from auth.services.token_service import TokenService
 from core.database import get_db
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
@@ -46,3 +47,15 @@ async def update_user(data: UpdateUserRequest, db: AsyncGenerator = Depends(get_
         raise HTTPException(404, "User not found")
 
     return user
+
+@user_router.delete("/delete")
+async def delete_user(request: Request, response: Response, db: AsyncGenerator = Depends(get_db), payload: TokenPayload = Depends(auth.token_required(type="access", locations=["headers"]))):
+    user_id = UUID(payload.sub)
+    deleted = await UserService(UserRepository(db)).delete(user_id)
+
+    if deleted is None:
+        raise HTTPException(404, "User not found")
+
+    await TokenService.revoke_tokens(request, payload, db)
+    auth.unset_refresh_cookies(response)
+    return {"message": "User deleted"}

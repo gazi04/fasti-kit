@@ -19,6 +19,14 @@ class UserRepository:
         await self.db.refresh(model)
         return self._to_entity(model)
 
+    async def get(self, id: UUID) -> Optional[User]:
+        result = await self.db.scalar(select(UserModel).where(UserModel.id == id))
+
+        if result is None:
+            return
+
+        return self._to_entity(result)
+
     async def get_by_email(self, email: str) -> Optional[User]:
         result = await self.db.scalar(select(UserModel).where(UserModel.email == email))
 
@@ -47,6 +55,28 @@ class UserRepository:
 
         await self.db.refresh(user)
         return self._to_entity(user)
+
+    async def delete(self, id: UUID) -> Optional[User]:
+        user = await self.db.get(UserModel, id)
+
+        if user is None:
+            return
+
+        user.is_active = False
+        await self.db.commit()
+        await self.db.refresh(user)
+        return self._to_entity(user)
+
+    async def force_delete(self, id: UUID) -> Optional[User]:
+        user = await self.db.get(UserModel, id)
+
+        if user is None:
+            return
+        result = self._to_entity(user)
+
+        await self.db.delete(user)
+        await self.db.commit()
+        return result
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:

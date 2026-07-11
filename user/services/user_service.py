@@ -21,3 +21,10 @@ class UserService:
     async def update(self, user_id: UUID, data: UpdateUserRequest) -> Optional[User]:
         data.password = SecurityService.hash_password(data.password) if data.password else None
         return await self.repo.update(id=user_id, **data.model_dump(exclude_unset=True))
+
+    async def delete(self, user_id: UUID, force: bool = False) -> Optional[User]:
+        if force:
+            return await self.repo.force_delete(user_id)
+
+        return await self.repo.delete(user_id)
+

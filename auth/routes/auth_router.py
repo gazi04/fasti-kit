@@ -1,4 +1,5 @@
 from typing import AsyncGenerator
+from uuid import UUID
 
 from authx import TokenPayload
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -18,7 +19,7 @@ auth_router = APIRouter(prefix='/auth', tags=['Auth'])
 async def login(data: LoginRequest, request: Request, response: Response, db: AsyncGenerator = Depends(get_db)) -> LoginResponse:
     user = await UserRepository(db).get_by_email(data.email)
 
-    if user is None or not SecurityService.check_password(data.password, user.password_hash):
+    if user is None or not user.is_active or not SecurityService.check_password(data.password, user.password_hash):
         raise HTTPException(401, detail='Invalid credentials')
 
     token = auth.create_access_token(uid=str(user.id))
@@ -35,7 +36,12 @@ async def protected(payload: TokenPayload = Depends(auth.token_required(type='ac
 
 
 @auth_router.post('/refresh')
-async def refresh(payload: TokenPayload = Depends(auth.token_required(type='refresh', locations=['cookies']))) -> LoginResponse:
+async def refresh(db: AsyncGenerator = Depends(get_db), payload: TokenPayload = Depends(auth.token_required(type='refresh', locations=['cookies']))) -> LoginResponse:
+    user = await UserRepository(db).get(UUID(payload.sub))
+
+    if user is None or not user.is_active:
+        raise HTTPException(401, detail="Invalid credentials")
+
     new_access_token = auth.create_access_token(uid=payload.sub)
     return LoginResponse(access_token=new_access_token)
 

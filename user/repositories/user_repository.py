@@ -1,6 +1,8 @@
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from user.entities.user import User
@@ -24,6 +26,27 @@ class UserRepository:
             return
 
         return self._to_entity(result)
+
+    async def update(self, id: UUID, **fields) -> Optional[User]:
+        user = await self.db.get(UserModel, id)
+
+        if user is None:
+            return
+
+        for key, value in fields.items():
+            if value is None:
+                continue
+
+            setattr(user, key, value)
+
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise ValueError("Email taken")
+
+        await self.db.refresh(user)
+        return self._to_entity(user)
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:

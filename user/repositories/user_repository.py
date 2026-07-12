@@ -16,7 +16,13 @@ class UserRepository:
     async def add(self, full_name: str, email: str, password_hash: str) -> User:
         model = UserModel(full_name=full_name, email=email, password_hash=password_hash)
         self.db.add(model)
-        await self.db.commit()
+
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise ValueError("Email taken")
+
         await self.db.refresh(model)
         return self._to_entity(model)
 

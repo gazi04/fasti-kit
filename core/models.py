@@ -4,5 +4,5 @@ And can be used in the case where we want to import all the models but at the sa
 """
 
 from core.database import Base  # noqa: F401
-from user.models import UserModel
-from auth.models import RevokedTokenModel
+from user.models import UserModel # noqa: F401
+from auth.models import RevokedTokenModel # noqa: F401

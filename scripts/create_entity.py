@@ -1,9 +1,14 @@
 import argparse
 from pathlib import Path
 
-from scripts._boilerplate import to_pascal_case, to_snake_case, update_init, write_new_file
+from scripts._boilerplate import (
+    to_pascal_case,
+    to_snake_case,
+    update_init,
+    write_new_file,
+)
 
-TEMPLATE = '''from dataclasses import dataclass
+TEMPLATE = """from dataclasses import dataclass
 from datetime import datetime
 import uuid
 
@@ -15,7 +20,7 @@ class {class_name}:
     is_active: bool
     created_at: datetime
     updated_at: datetime
-'''
+"""
 
 
 def create_entity(domain: str, name: str) -> None:

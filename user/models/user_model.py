@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 import uuid
 
+
 class UserModel(Base):
     __tablename__ = "users"
 
@@ -29,4 +30,3 @@ class UserModel(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-

@@ -20,11 +20,11 @@ class RevokedTokenRepository:
 
     async def exists(self, jti: str) -> bool:
         result = await self.db.scalar(
-                select(RevokedTokenModel).where(
-                    RevokedTokenModel.jti == jti,
-                    RevokedTokenModel.expires_at > datetime.now(timezone.utc)
-                )
+            select(RevokedTokenModel).where(
+                RevokedTokenModel.jti == jti,
+                RevokedTokenModel.expires_at > datetime.now(timezone.utc),
             )
+        )
 
         return result is not None
 

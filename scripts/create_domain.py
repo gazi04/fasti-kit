@@ -1,7 +1,14 @@
 import argparse
 from pathlib import Path
 
-DOMAIN_SUBFOLDERS = ("routes", "schemas", "entities", "models", "repositories", "services")
+DOMAIN_SUBFOLDERS = (
+    "routes",
+    "schemas",
+    "entities",
+    "models",
+    "repositories",
+    "services",
+)
 
 
 def create_domain(name: str) -> None:

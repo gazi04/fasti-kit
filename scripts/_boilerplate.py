@@ -52,7 +52,11 @@ def update_init(init_path: Path, module: str, symbols: list[str]) -> None:
                 continue
             all_match = _ALL_RE.match(line)
             if all_match:
-                all_names = [n.strip().strip("'\"") for n in all_match.group(1).split(",") if n.strip()]
+                all_names = [
+                    n.strip().strip("'\"")
+                    for n in all_match.group(1).split(",")
+                    if n.strip()
+                ]
 
     existing = imports.get(module, [])
     for symbol in symbols:

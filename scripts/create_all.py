@@ -20,7 +20,9 @@ def create_all(domain: str, name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scaffold entity/model/repository/schema/service/route in one go")
+    parser = argparse.ArgumentParser(
+        description="Scaffold entity/model/repository/schema/service/route in one go"
+    )
     parser.add_argument("domain")
     parser.add_argument("name")
     args = parser.parse_args()

@@ -1,9 +1,14 @@
 import argparse
 from pathlib import Path
 
-from scripts._boilerplate import to_pascal_case, to_snake_case, update_init, write_new_file
+from scripts._boilerplate import (
+    to_pascal_case,
+    to_snake_case,
+    update_init,
+    write_new_file,
+)
 
-TEMPLATE = '''from typing import Optional
+TEMPLATE = """from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -72,7 +77,7 @@ async def delete_{snake}(
         raise HTTPException(404, "{class_name} not found")
 
     return {{"message": "{class_name} deleted"}}
-'''
+"""
 
 
 def create_route(domain: str, name: str) -> None:
@@ -85,7 +90,14 @@ def create_route(domain: str, name: str) -> None:
 
     write_new_file(
         file_path,
-        TEMPLATE.format(domain=domain, snake=snake, class_name=pascal, route_var=route_var, prefix=snake, tag=pascal),
+        TEMPLATE.format(
+            domain=domain,
+            snake=snake,
+            class_name=pascal,
+            route_var=route_var,
+            prefix=snake,
+            tag=pascal,
+        ),
     )
     update_init(layer_dir / "__init__.py", route_var, [route_var])
 

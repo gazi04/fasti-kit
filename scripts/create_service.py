@@ -1,9 +1,14 @@
 import argparse
 from pathlib import Path
 
-from scripts._boilerplate import to_pascal_case, to_snake_case, update_init, write_new_file
+from scripts._boilerplate import (
+    to_pascal_case,
+    to_snake_case,
+    update_init,
+    write_new_file,
+)
 
-TEMPLATE = '''from typing import Optional
+TEMPLATE = """from typing import Optional
 from uuid import UUID
 
 from {domain}.entities.{snake} import {class_name}
@@ -29,7 +34,7 @@ class {class_name}Service:
             return await self.repo.force_delete(id)
 
         return await self.repo.delete(id)
-'''
+"""
 
 
 def create_service(domain: str, name: str) -> None:
@@ -39,7 +44,9 @@ def create_service(domain: str, name: str) -> None:
     layer_dir = Path(domain) / "services"
     file_path = layer_dir / f"{snake}_service.py"
 
-    write_new_file(file_path, TEMPLATE.format(class_name=pascal, domain=domain, snake=snake))
+    write_new_file(
+        file_path, TEMPLATE.format(class_name=pascal, domain=domain, snake=snake)
+    )
     update_init(layer_dir / "__init__.py", f"{snake}_service", [f"{pascal}Service"])
 
 

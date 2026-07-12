@@ -1,9 +1,15 @@
 import argparse
 from pathlib import Path
 
-from scripts._boilerplate import pluralize, to_pascal_case, to_snake_case, update_init, write_new_file
+from scripts._boilerplate import (
+    pluralize,
+    to_pascal_case,
+    to_snake_case,
+    update_init,
+    write_new_file,
+)
 
-TEMPLATE = '''from datetime import datetime, timezone
+TEMPLATE = """from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
@@ -31,7 +37,7 @@ class {class_name}Model(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-'''
+"""
 
 
 def create_model(domain: str, name: str) -> None:

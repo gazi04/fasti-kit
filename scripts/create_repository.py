@@ -1,9 +1,14 @@
 import argparse
 from pathlib import Path
 
-from scripts._boilerplate import to_pascal_case, to_snake_case, update_init, write_new_file
+from scripts._boilerplate import (
+    to_pascal_case,
+    to_snake_case,
+    update_init,
+    write_new_file,
+)
 
-TEMPLATE = '''from typing import Optional
+TEMPLATE = """from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -87,7 +92,7 @@ class {class_name}Repository:
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
-'''
+"""
 
 
 def create_repository(domain: str, name: str) -> None:
@@ -97,8 +102,12 @@ def create_repository(domain: str, name: str) -> None:
     layer_dir = Path(domain) / "repositories"
     file_path = layer_dir / f"{snake}_repository.py"
 
-    write_new_file(file_path, TEMPLATE.format(class_name=pascal, domain=domain, snake=snake))
-    update_init(layer_dir / "__init__.py", f"{snake}_repository", [f"{pascal}Repository"])
+    write_new_file(
+        file_path, TEMPLATE.format(class_name=pascal, domain=domain, snake=snake)
+    )
+    update_init(
+        layer_dir / "__init__.py", f"{snake}_repository", [f"{pascal}Repository"]
+    )
 
 
 def main() -> None:

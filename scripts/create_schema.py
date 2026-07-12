@@ -1,9 +1,14 @@
 import argparse
 from pathlib import Path
 
-from scripts._boilerplate import to_pascal_case, to_snake_case, update_init, write_new_file
+from scripts._boilerplate import (
+    to_pascal_case,
+    to_snake_case,
+    update_init,
+    write_new_file,
+)
 
-TEMPLATE = '''from datetime import datetime
+TEMPLATE = """from datetime import datetime
 import uuid
 
 from pydantic import BaseModel
@@ -32,7 +37,7 @@ class {class_name}Response(BaseModel):
     updated_at: datetime
 
     model_config = {{'from_attributes': True}}
-'''
+"""
 
 
 def create_schema(domain: str, name: str) -> None:
@@ -46,7 +51,12 @@ def create_schema(domain: str, name: str) -> None:
     update_init(
         layer_dir / "__init__.py",
         f"{snake}_schema",
-        [f"Create{pascal}Request", f"Update{pascal}Request", f"Get{pascal}Request", f"{pascal}Response"],
+        [
+            f"Create{pascal}Request",
+            f"Update{pascal}Request",
+            f"Get{pascal}Request",
+            f"{pascal}Response",
+        ],
     )
 
 

@@ -4,19 +4,21 @@ from pydantic import BaseModel, EmailStr
 import uuid
 
 
-
 class CreateUserRequest(BaseModel):
     name: str
     email: str
     password: str
 
+
 class GetUserRequest(BaseModel):
     email: str
+
 
 class UpdateUserRequest(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
     password: Optional[str] = None
+
 
 class UserResponse(BaseModel):
     id: uuid.UUID
@@ -26,4 +28,4 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {'from_attributes': True}
+    model_config = {"from_attributes": True}

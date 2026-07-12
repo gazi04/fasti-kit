@@ -9,7 +9,7 @@ from alembic import context
 from core.setting import get_settings
 from core.database import Base
 
-import core.models # noqa: F401  (registers models on Base.metadata for autogenerate)
+import core.models  # noqa: F401  (registers models on Base.metadata for autogenerate)
 
 
 settings = get_settings()
@@ -58,10 +58,9 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def run_migrations(connection):
-    context.configure(
-        connection=connection, target_metadata=target_metadata
-    )
+    context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
         context.run_migrations()
@@ -86,6 +85,7 @@ async def run_migrations_online() -> None:
     async with connectable.connect() as connection:
         await connection.run_sync(run_migrations)
     await connectable.dispose()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

@@ -19,6 +19,7 @@ dependencies = [
     "authx>=1.7.1",
     "bcrypt>=5.0.0",
     "slowapi>=0.1.10",
+    "fastapi-mail[aioredis,httpx]>=1.6.5",
 ]
 
 [project.scripts]

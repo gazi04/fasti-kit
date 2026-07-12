@@ -24,6 +24,7 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str
+    is_verified: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime

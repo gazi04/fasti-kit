@@ -2,9 +2,10 @@ from typing import AsyncGenerator, Optional
 from uuid import UUID
 
 from authx import TokenPayload
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 
 from auth.dependencies import auth
+from auth.services.email_verfication_service import EmailVerficationService
 from auth.services.token_service import TokenService
 from core.database import get_db
 from user.entities.user import User
@@ -22,10 +23,18 @@ user_router = APIRouter(prefix="/user", tags=["User"])
 
 @user_router.post("/create", response_model=UserResponse)
 async def create_user(
-    data: CreateUserRequest, db: AsyncGenerator = Depends(get_db)
+        data: CreateUserRequest, background_tasks: BackgroundTasks, db: AsyncGenerator = Depends(get_db)
 ) -> User:
     service = UserService(UserRepository(db))
-    return await service.register(data)
+
+    try:
+        user = await service.register(data)
+    except ValueError:
+        raise HTTPException(409, "Email already in use")
+
+    token = EmailVerficationService.create_verification_token(str(user.id))
+    background_tasks.add_task(EmailVerficationService.send_verification_email, user.email, token)
+    return user
 
 
 @user_router.get("/get", response_model=UserResponse)

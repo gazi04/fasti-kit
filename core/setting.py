@@ -10,6 +10,8 @@ class Settings(BaseSettings):
 
     allowed_origins: list[str]
 
+    backend_url: str = "localhost:8000"
+
     jwt_secret_key: str
     jwt_cookie_secure: str
 

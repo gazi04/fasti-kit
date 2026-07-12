@@ -87,6 +87,7 @@ class UserRepository:
             full_name=model.full_name,
             password_hash=model.password_hash,
             is_active=model.is_active,
+            is_verified=model.is_verified,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

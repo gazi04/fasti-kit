@@ -1,28 +1,29 @@
 from functools import lru_cache
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    db_user: str
-    db_password: str
-    db_name: str
-    database_url: str
+    db_user: Optional[str] = None
+    db_password: Optional[str] = None
+    db_name: Optional[str] = None
+    database_url: Optional[str] = None
 
-    allowed_origins: list[str]
+    allowed_origins: Optional[list[str]] = None
 
-    backend_url: str = "localhost:8000"
+    backend_url: Optional[str] = "localhost:8000"
 
-    jwt_secret_key: str
-    jwt_cookie_secure: str
+    jwt_secret_key: Optional[str] = None
+    jwt_cookie_secure: Optional[str] = None
 
-    mail_username: str
-    mail_password: str
-    mail_from: str
-    mail_from_name: str
-    mail_port: int
-    mail_server: str
-    mail_starttls: bool
-    mail_ssl_tls: bool
+    mail_username: Optional[str] = None
+    mail_password: Optional[str] = None
+    mail_from: Optional[str] = None
+    mail_from_name: Optional[str] = None
+    mail_port: Optional[int] = None
+    mail_server: Optional[str] = None
+    mail_starttls: Optional[bool] = None
+    mail_ssl_tls: Optional[bool] = None
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

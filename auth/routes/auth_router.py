@@ -16,6 +16,7 @@ from core.limiter import limiter
 from core.database import get_db
 from user.repositories.user_repository import UserRepository
 
+# TODO: add reset and verify email operations
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -109,7 +110,12 @@ async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict
     await user_repo.update(id=user.id, is_verified=True)
 
     expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-    await token_repo.add(payload["jti"], expires_at)
+
+    try:
+        await token_repo.add(payload["jti"], expires_at)
+    except ValueError:
+        raise HTTPException(400, detail="Verification link already used")
+
     return {"message": "Email verified"}
 
 

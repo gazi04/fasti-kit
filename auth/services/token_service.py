@@ -9,7 +9,10 @@ class TokenService:
     @staticmethod
     async def revoke_tokens(request: Request, payload: TokenPayload, db):
         repo = RevokedTokenRepository(db)
-        await repo.add(payload.jti, payload.expiry_datetime)
+        try:
+            await repo.add(payload.jti, payload.expiry_datetime)
+        except ValueError:
+            pass
 
         refresh_token = request.cookies.get(auth.config.JWT_REFRESH_COOKIE_NAME)
         if refresh_token:

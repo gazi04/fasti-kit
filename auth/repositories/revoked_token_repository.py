@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entities.revoked_token import RevokedToken
@@ -14,7 +15,13 @@ class RevokedTokenRepository:
     async def add(self, jti: str, expires_at: datetime) -> RevokedToken:
         model = RevokedTokenModel(jti=jti, expires_at=expires_at)
         self.db.add(model)
-        await self.db.commit()
+
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise ValueError("Token already used")
+
         await self.db.refresh(model)
         return self._to_entity(model)
 

@@ -8,7 +8,7 @@ import jwt
 
 settings = get_settings()
 VERIFY_TOKEN_EXPIRY = timedelta(hours=24)
-VERIFY_PURPOSE = "email_verify"
+VERIFY_TYPE = "email_verify"
 
 class EmailVerficationService:
     @staticmethod
@@ -16,7 +16,7 @@ class EmailVerficationService:
         now = datetime.now(timezone.utc)
         payload = {
                 "sub": user_id,
-                "purpose": VERIFY_PURPOSE,
+                "type": VERIFY_TYPE,
                 "jti": uuid4().hex,
                 "iat": now,
                 "exp": now + VERIFY_TOKEN_EXPIRY,

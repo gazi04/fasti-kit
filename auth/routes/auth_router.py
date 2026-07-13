@@ -9,7 +9,7 @@ import jwt
 from auth.dependencies import auth
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.schemas.auth_schema import LoginRequest, LoginResponse
-from auth.services.email_verfication_service import EmailVerficationService
+from auth.services.email_verfication_service import VERIFY_TYPE, EmailVerficationService
 from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
 from core.limiter import limiter
@@ -88,10 +88,10 @@ async def logout(
 async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict:
     try:
         payload = await EmailVerficationService.decode_verification_token(token)
-    except (jwt.PyJWKError, jwt.InvalidSignatureError):
-        raise HTTPException(400, detail="Invalid verification token")
+    except (jwt.ExpiredSignatureError, jwt.DecodeError, jwt.InvalidSignatureError):
+        raise HTTPException(400, detail="Invalid or expired verification link")
 
-    if payload.get("purpose") != "email_verify":
+    if payload.get("type") != VERIFY_TYPE:
         raise HTTPException(400, detail="Invalid verification token")
 
     token_repo = RevokedTokenRepository(db)

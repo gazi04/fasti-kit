@@ -3,12 +3,12 @@ from typing import AsyncGenerator
 from uuid import UUID
 
 from authx import TokenPayload
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 import jwt
 
 from auth.dependencies import auth
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
-from auth.schemas.auth_schema import LoginRequest, LoginResponse
+from auth.schemas.auth_schema import LoginRequest, LoginResponse, ResendVerficationRequest
 from auth.services.email_verfication_service import VERIFY_TYPE, EmailVerficationService
 from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
@@ -108,3 +108,15 @@ async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict
     expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
     await token_repo.add(payload["jti"], expires_at)
     return {"message": "Email verified"}
+
+
+@auth_router.post("/resend-verification")
+@limiter.limit("5/minute")
+async def resend_verification(data: ResendVerficationRequest, request: Request, background_task: BackgroundTasks, db: AsyncGenerator = Depends(get_db)) -> dict:
+    user = await UserRepository(db).get_by_email(data.email)
+
+    if user is not None and not user.is_verified:
+        token = EmailVerficationService.create_verification_token(str(user.id))
+        background_task.add_task(EmailVerficationService.send_verification_email, user.email, token)
+
+    return {"message": "If an account with that email exists and is unverified, a verification link has been sent."}

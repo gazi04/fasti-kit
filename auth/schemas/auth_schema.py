@@ -13,3 +13,7 @@ class LoginResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
+
+
+class ResendVerficationRequest(BaseModel):
+    email: EmailStr

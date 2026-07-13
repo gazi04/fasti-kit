@@ -25,14 +25,21 @@ user_router = APIRouter(prefix="/user", tags=["User"])
 async def create_user(
         data: CreateUserRequest, background_tasks: BackgroundTasks, db: AsyncGenerator = Depends(get_db)
 ) -> User:
-    service = UserService(UserRepository(db))
+    user_repo = UserRepository(db)
+    service = UserService(user_repo)
 
     try:
         user = await service.register(data)
     except ValueError:
         raise HTTPException(409, "Email already in use")
 
-    token = EmailVerficationService.create_verification_token(str(user.id))
+    token, jti = EmailVerficationService.create_verification_token(str(user.id))
+
+    try:
+        await user_repo.update(user.id, pending_verification_jti=jti)
+    except Exception:
+        raise HTTPException(500, detail="Failed to schedule verification email")
+
     background_tasks.add_task(EmailVerficationService.send_verification_email, user.email, token)
     return user
 

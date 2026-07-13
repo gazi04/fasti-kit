@@ -103,6 +103,9 @@ async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict
     if user is None:
         raise HTTPException(404, detail="User not found")
 
+    if user.pending_verification_jti != payload['jti']:
+        raise HTTPException(400, detail="Verification link has been superseded by a newer request")
+
     await user_repo.update(id=user.id, is_verified=True)
 
     expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
@@ -113,10 +116,12 @@ async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict
 @auth_router.post("/resend-verification")
 @limiter.limit("5/minute")
 async def resend_verification(data: ResendVerficationRequest, request: Request, background_task: BackgroundTasks, db: AsyncGenerator = Depends(get_db)) -> dict:
-    user = await UserRepository(db).get_by_email(data.email)
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_email(data.email)
 
     if user is not None and not user.is_verified:
-        token = EmailVerficationService.create_verification_token(str(user.id))
+        token, pending_jti = EmailVerficationService.create_verification_token(str(user.id))
+        await user_repo.update(user.id, pending_verification_jti=pending_jti)
         background_task.add_task(EmailVerficationService.send_verification_email, user.email, token)
 
     return {"message": "If an account with that email exists and is unverified, a verification link has been sent."}

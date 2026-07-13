@@ -1,3 +1,5 @@
+from typing import Optional
+
 from core.database import Base
 from datetime import datetime, timezone
 from sqlalchemy import (
@@ -22,6 +24,7 @@ class UserModel(Base):
     full_name: Mapped[str] = mapped_column(String(255))
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    pending_verification_jti: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

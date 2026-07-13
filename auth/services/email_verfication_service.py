@@ -12,17 +12,18 @@ VERIFY_TYPE = "email_verify"
 
 class EmailVerficationService:
     @staticmethod
-    def create_verification_token(user_id: str) -> str:
+    def create_verification_token(user_id: str) -> tuple[str, str]:
         now = datetime.now(timezone.utc)
+        jti = uuid4().hex
         payload = {
                 "sub": user_id,
                 "type": VERIFY_TYPE,
-                "jti": uuid4().hex,
+                "jti": jti,
                 "iat": now,
                 "exp": now + VERIFY_TOKEN_EXPIRY,
                 }
 
-        return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
+        return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256"), jti
 
     @staticmethod
     async def send_verification_email(email: str, token: str) -> None:

@@ -94,6 +94,7 @@ class UserRepository:
             password_hash=model.password_hash,
             is_active=model.is_active,
             is_verified=model.is_verified,
+            pending_verification_jti=model.pending_verification_jti,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

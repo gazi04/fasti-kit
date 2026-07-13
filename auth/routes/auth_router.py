@@ -89,7 +89,7 @@ async def logout(
 async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict:
     try:
         payload = await EmailVerficationService.decode_verification_token(token)
-    except (jwt.ExpiredSignatureError, jwt.DecodeError, jwt.InvalidSignatureError):
+    except jwt.PyJWTError:
         raise HTTPException(400, detail="Invalid or expired verification link")
 
     if payload.get("type") != VERIFY_TYPE:

@@ -60,6 +60,7 @@ async def protected(
 @limiter.limit("5/minute")
 async def refresh(
     db: AsyncGenerator = Depends(get_db),
+    requet: Request,
     payload: TokenPayload = Depends(
         auth.token_required(type="refresh", locations=["cookies"])
     ),
@@ -88,7 +89,7 @@ async def logout(
 
 @auth_router.get("/verify-email")
 @limiter.limit("5/minute")
-async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict:
+async def verify_email(token: str, request: Request, db: AsyncGenerator = Depends(get_db)) -> dict:
     try:
         payload = await EmailVerficationService.decode_verification_token(token)
     except jwt.PyJWTError:

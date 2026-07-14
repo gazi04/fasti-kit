@@ -17,12 +17,7 @@ class UserRepository:
         model = UserModel(full_name=full_name, email=email, password_hash=password_hash)
         self.db.add(model)
 
-        try:
-            await self.db.commit()
-        except IntegrityError:
-            await self.db.rollback()
-            raise ValueError("Email taken")
-
+        await self._commit_or_raise()
         await self.db.refresh(model)
         return self._to_entity(model)
 
@@ -54,12 +49,7 @@ class UserRepository:
 
             setattr(user, key, value)
 
-        try:
-            await self.db.commit()
-        except IntegrityError:
-            await self.db.rollback()
-            raise ValueError("Email taken")
-
+        await self._commit_or_raise()
         await self.db.refresh(user)
         return self._to_entity(user)
 
@@ -84,6 +74,13 @@ class UserRepository:
         await self.db.delete(user)
         await self.db.commit()
         return result
+
+    async def _commit_or_raise(self) -> None:
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise ValueError("Email taken")
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:

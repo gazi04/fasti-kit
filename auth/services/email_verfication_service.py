@@ -23,7 +23,7 @@ class EmailVerficationService:
                 "exp": now + VERIFY_TOKEN_EXPIRY,
                 }
 
-        return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256"), jti
+        return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm), jti
 
     @staticmethod
     async def send_verification_email(email: str, token: str) -> None:
@@ -32,5 +32,5 @@ class EmailVerficationService:
         await send_email(subject="Verify your email", recipients=[email], body=body)
 
     @staticmethod
-    async def decode_verification_token(token: str) -> dict[str, Any]:
-        return jwt.decode(token, settings.jwt_secret_key, algorithms=['HS256'])
+    def decode_verification_token(token: str) -> dict[str, Any]:
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])

@@ -8,7 +8,7 @@ settings = get_settings()
 
 config = AuthXConfig(
     JWT_SECRET_KEY=settings.jwt_secret_key,
-    JWT_ALGORITHM="HS256",
+    JWT_ALGORITHM=settings.jwt_algorithm,
     JWT_TOKEN_LOCATION=["headers", "cookies"],
     JWT_COOKIE_SECURE=settings.jwt_cookie_secure,
     JWT_COOKIE_HTTP_ONLY=True,  # Prevent JS access
@@ -20,7 +20,7 @@ auth = AuthX(config=config)
 
 async def is_token_revoked(token: str) -> bool:
     payload = TokenPayload.decode(
-        token, key=settings.jwt_secret_key, algorithms=["HS256"], verify=False
+        token, key=settings.jwt_secret_key, algorithms=[settings.jwt_algorithm], verify=False
     )
     async with AsyncSessionLocal() as db:
         return await RevokedTokenRepository(db).exists(payload.jti)

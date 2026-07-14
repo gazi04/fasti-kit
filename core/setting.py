@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     jwt_secret_key: Optional[str] = None
     jwt_cookie_secure: Optional[str] = None
+    jwt_algorithm: Optional[str] = None
 
     mail_username: Optional[str] = None
     mail_password: Optional[str] = None

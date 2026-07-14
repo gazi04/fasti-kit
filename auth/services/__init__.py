@@ -1,5 +1,5 @@
 from .security_service import SecurityService
 from .token_service import TokenService
-from .email_verfication_service import EmailVerficationService
+from .email_verification_service import EmailVerificationService
 
-__all__ = ['SecurityService', 'TokenService', 'EmailVerficationService']
+__all__ = ['SecurityService', 'TokenService', 'EmailVerificationService']

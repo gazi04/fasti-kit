@@ -10,7 +10,7 @@ settings = get_settings()
 VERIFY_TOKEN_EXPIRY = timedelta(hours=24)
 VERIFY_TYPE = "email_verify"
 
-class EmailVerficationService:
+class EmailVerificationService:
     @staticmethod
     def create_verification_token(user_id: str) -> tuple[str, str]:
         now = datetime.now(timezone.utc)
@@ -32,5 +32,5 @@ class EmailVerficationService:
         await send_email(subject="Verify your email", recipients=[email], body=body)
 
     @staticmethod
-    def decode_verification_token(token: str) -> dict[str, Any]:
+    async def decode_verification_token(token: str) -> dict[str, Any]:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])

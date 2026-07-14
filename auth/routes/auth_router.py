@@ -9,7 +9,7 @@ import jwt
 from auth.dependencies import auth
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.schemas.auth_schema import LoginRequest, LoginResponse, ResendVerficationRequest
-from auth.services.email_verfication_service import VERIFY_TYPE, EmailVerficationService
+from auth.services.email_verification_service import VERIFY_TYPE, EmailVerificationService
 from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
 from core.limiter import limiter
@@ -91,7 +91,7 @@ async def logout(
 @limiter.limit("5/minute")
 async def verify_email(token: str, request: Request, db: AsyncGenerator = Depends(get_db)) -> dict:
     try:
-        payload = await EmailVerficationService.decode_verification_token(token)
+        payload = await EmailVerificationService.decode_verification_token(token)
     except jwt.PyJWTError:
         raise HTTPException(400, detail="Invalid or expired verification link")
 
@@ -129,8 +129,8 @@ async def resend_verification(data: ResendVerficationRequest, request: Request, 
     user = await user_repo.get_by_email(data.email)
 
     if user is not None and not user.is_verified:
-        token, pending_jti = EmailVerficationService.create_verification_token(str(user.id))
+        token, pending_jti = EmailVerificationService.create_verification_token(str(user.id))
         await user_repo.update(user.id, pending_verification_jti=pending_jti)
-        background_task.add_task(EmailVerficationService.send_verification_email, user.email, token)
+        background_task.add_task(EmailVerificationService.send_verification_email, user.email, token)
 
     return {"message": "If an account with that email exists and is unverified, a verification link has been sent."}

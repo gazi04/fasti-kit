@@ -5,7 +5,7 @@ from authx import TokenPayload
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 
 from auth.dependencies import auth
-from auth.services.email_verfication_service import EmailVerficationService
+from auth.services.email_verification_service import EmailVerificationService
 from auth.services.token_service import TokenService
 from core.database import get_db
 from user.entities.user import User
@@ -33,14 +33,14 @@ async def create_user(
     except ValueError:
         raise HTTPException(409, "Email already in use")
 
-    token, jti = EmailVerficationService.create_verification_token(str(user.id))
+    token, jti = EmailVerificationService.create_verification_token(str(user.id))
 
     try:
         await user_repo.update(user.id, pending_verification_jti=jti)
     except Exception:
         raise HTTPException(500, detail="Failed to schedule verification email")
 
-    background_tasks.add_task(EmailVerficationService.send_verification_email, user.email, token)
+    background_tasks.add_task(EmailVerificationService.send_verification_email, user.email, token)
     return user
 
 

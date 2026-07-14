@@ -57,6 +57,7 @@ async def protected(
 
 
 @auth_router.post("/refresh")
+@limiter.limit("5/minute")
 async def refresh(
     db: AsyncGenerator = Depends(get_db),
     payload: TokenPayload = Depends(
@@ -86,6 +87,7 @@ async def logout(
     return {"message": "Logged out"}
 
 @auth_router.get("/verify-email")
+@limiter.limit("5/minute")
 async def verify_email(token: str, db: AsyncGenerator = Depends(get_db)) -> dict:
     try:
         payload = await EmailVerficationService.decode_verification_token(token)

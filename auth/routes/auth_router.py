@@ -59,8 +59,8 @@ async def protected(
 @auth_router.post("/refresh")
 @limiter.limit("5/minute")
 async def refresh(
+    request: Request,
     db: AsyncGenerator = Depends(get_db),
-    requet: Request,
     payload: TokenPayload = Depends(
         auth.token_required(type="refresh", locations=["cookies"])
     ),

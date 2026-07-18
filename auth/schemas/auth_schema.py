@@ -15,5 +15,5 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
 
 
-class ResendVerficationRequest(BaseModel):
+class ResendVerificationRequest(BaseModel):
     email: EmailStr

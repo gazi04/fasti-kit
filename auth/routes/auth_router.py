@@ -8,7 +8,7 @@ import jwt
 
 from auth.dependencies import auth
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
-from auth.schemas.auth_schema import LoginRequest, LoginResponse, ResendVerficationRequest
+from auth.schemas.auth_schema import LoginRequest, LoginResponse, ResendVerificationRequest
 from auth.services.email_verification_service import VERIFY_TYPE, EmailVerificationService
 from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
@@ -124,7 +124,7 @@ async def verify_email(token: str, request: Request, db: AsyncGenerator = Depend
 
 @auth_router.post("/resend-verification")
 @limiter.limit("5/minute")
-async def resend_verification(data: ResendVerficationRequest, request: Request, background_task: BackgroundTasks, db: AsyncGenerator = Depends(get_db)) -> dict:
+async def resend_verification(data: ResendVerificationRequest, request: Request, background_task: BackgroundTasks, db: AsyncGenerator = Depends(get_db)) -> dict:
     user_repo = UserRepository(db)
     user = await user_repo.get_by_email(data.email)
 

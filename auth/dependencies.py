@@ -1,3 +1,5 @@
+from typing import Any
+
 from authx import AuthX, AuthXConfig, TokenPayload
 
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
@@ -18,10 +20,13 @@ config = AuthXConfig(
 auth = AuthX(config=config)
 
 
-async def is_token_revoked(token: str) -> bool:
+async def is_token_revoked(token: str, **kwargs: Any) -> bool:
     payload = TokenPayload.decode(
         token, key=settings.jwt_secret_key, algorithms=[settings.jwt_algorithm], verify=False
     )
+    if payload.jti is None:
+        return True
+
     async with AsyncSessionLocal() as db:
         return await RevokedTokenRepository(db).exists(payload.jti)
 

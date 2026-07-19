@@ -9,7 +9,12 @@ from auth.dependencies import auth
 from auth.routes import auth_router
 from core.limiter import limiter
 from core.setting import get_settings
-from core.startup_checks import StartupCheckError, check_database, check_mail_config
+from core.startup_checks import (
+    StartupCheckError,
+    check_database,
+    check_jwt_config,
+    check_mail_config,
+)
 from user.routes import user_router
 
 settings = get_settings()
@@ -19,6 +24,7 @@ async def lifespan(app: FastAPI):
     try:
         await check_database()
         await check_mail_config()
+        await check_jwt_config()
     except StartupCheckError as e:
         print(f"\n[STARTUP FAILED]: {e}")
         raise 

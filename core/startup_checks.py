@@ -33,3 +33,16 @@ async def check_mail_config() -> None:
                 f"Set these in .env — see .env.example."
                 )
 
+async def check_jwt_config() -> None:
+    required = {
+            "JWT_SECRET_KEY": settings.jwt_secret_key,
+            "JWT_ALGORITHM": settings.jwt_algorithm,
+            }
+
+    missing = [key for key, value in required.items() if not value]
+    if missing:
+        raise StartupCheckError(
+                f"Missing JWT configuration: {', '.join(missing)}. "
+                f"Set these in .env — see .env.example."
+                )
+

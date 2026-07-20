@@ -2,7 +2,14 @@ from typing import AsyncGenerator, Optional
 from uuid import UUID
 
 from authx import TokenPayload
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+)
 
 from auth.dependencies import auth
 from auth.services.email_verification_service import EmailVerificationService
@@ -23,7 +30,9 @@ user_router = APIRouter(prefix="/user", tags=["User"])
 
 @user_router.post("/create", response_model=UserResponse)
 async def create_user(
-        data: CreateUserRequest, background_tasks: BackgroundTasks, db: AsyncGenerator = Depends(get_db)
+    data: CreateUserRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncGenerator = Depends(get_db),
 ) -> User:
     user_repo = UserRepository(db)
     service = UserService(user_repo)
@@ -40,7 +49,9 @@ async def create_user(
     except Exception:
         raise HTTPException(500, detail="Failed to schedule verification email")
 
-    background_tasks.add_task(EmailVerificationService.send_verification_email, user.email, token)
+    background_tasks.add_task(
+        EmailVerificationService.send_verification_email, user.email, token
+    )
     return user
 
 

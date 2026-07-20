@@ -19,6 +19,7 @@ from user.routes import user_router
 
 settings = get_settings()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -27,9 +28,10 @@ async def lifespan(app: FastAPI):
         await check_jwt_config()
     except StartupCheckError as e:
         print(f"\n[STARTUP FAILED]: {e}")
-        raise 
+        raise
 
     yield
+
 
 app = FastAPI(title="Title", lifespan=lifespan)
 app.state.limiter = limiter

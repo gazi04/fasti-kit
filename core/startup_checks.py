@@ -26,7 +26,7 @@ async def check_mail_config() -> None:
             "MAIL_SERVER": settings.mail_server,
             }
 
-    missing = [key for key, value in required.items() if value is None]
+    missing = [key for key, value in required.items() if not value]
     if missing:
         raise StartupCheckError(
                 f"Missing SMTP configuration: {', '.join(missing)}. "

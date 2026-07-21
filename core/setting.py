@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     jwt_cookie_secure: bool = False
     jwt_algorithm: AlgorithmType = "HS256"
 
-    mail_username: str
-    mail_password: str
+    mail_username: Optional[str] = None
+    mail_password: Optional[str] = None
     mail_from: EmailStr
     mail_from_name: Optional[str] = None
     mail_port: int

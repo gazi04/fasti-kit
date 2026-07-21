@@ -20,17 +20,18 @@ _recipients_adapter = TypeAdapter(list[NameEmail])
 def get_mail():
     global _fast_mail
     if _fast_mail is None:
+        has_credentials = bool(settings.mail_username and settings.mail_password)
         conf = ConnectionConfig(
-            MAIL_USERNAME=settings.mail_username,
-            MAIL_PASSWORD=SecretStr(settings.mail_password),
+            MAIL_USERNAME=settings.mail_username or "",
+            MAIL_PASSWORD=SecretStr(settings.mail_password or ""),
             MAIL_FROM=settings.mail_from,
             MAIL_PORT=settings.mail_port,
             MAIL_SERVER=settings.mail_server,
             MAIL_FROM_NAME=settings.mail_from_name,
             MAIL_STARTTLS=settings.mail_starttls,
             MAIL_SSL_TLS=settings.mail_ssl_tls,
-            USE_CREDENTIALS=True,
-            VALIDATE_CERTS=True,
+            USE_CREDENTIALS=has_credentials,
+            VALIDATE_CERTS=has_credentials,
         )
         _fast_mail = FastMail(conf)
 

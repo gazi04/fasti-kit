@@ -22,8 +22,6 @@ async def check_database() -> None:
 
 async def check_mail_config() -> None:
     required = {
-        "MAIL_USERNAME": settings.mail_username,
-        "MAIL_PASSWORD": settings.mail_password,
         "MAIL_FROM": settings.mail_from,
         "MAIL_PORT": settings.mail_port,
         "MAIL_SERVER": settings.mail_server,

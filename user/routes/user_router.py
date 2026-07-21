@@ -14,6 +14,7 @@ from fastapi import (
 from auth.dependencies import auth
 from auth.services.email_verification_service import EmailVerificationService
 from auth.services.token_service import TokenService
+from core.limiter import limiter
 from core.database import get_db
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
@@ -29,8 +30,10 @@ user_router = APIRouter(prefix="/user", tags=["User"])
 
 
 @user_router.post("/create", response_model=UserResponse)
+@limiter.limit("5/minute")
 async def create_user(
     data: CreateUserRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncGenerator = Depends(get_db),
 ) -> User:

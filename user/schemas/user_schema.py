@@ -6,7 +6,7 @@ import uuid
 
 class CreateUserRequest(BaseModel):
     name: str
-    email: str
+    email: EmailStr
     password: str
 
 

@@ -16,21 +16,22 @@ import jwt
 from auth.dependencies import auth
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.schemas.auth_schema import (
+    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
     ResendVerificationRequest,
+    ResetPasswordRequest,
 )
 from auth.services.email_verification_service import (
     VERIFY_TYPE,
     EmailVerificationService,
 )
+from auth.services.password_reset_service import RESET_TYPE, PasswordResetService
 from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
 from core.limiter import limiter
 from core.database import get_db
 from user.repositories.user_repository import UserRepository
-
-# TODO: add reset and verify email operations
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -164,3 +165,65 @@ async def resend_verification(
     return {
         "message": "If an account with that email exists and is unverified, a verification link has been sent."
     }
+
+
+@auth_router.post("/forgot-password")
+@limiter.limit("5/minute")
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    request: Request,
+    background_task: BackgroundTasks,
+    db: AsyncGenerator = Depends(get_db),
+) -> dict:
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_email(data.email)
+
+    if user is not None and user.is_active:
+        token, jti = PasswordResetService.create_reset_token(str(user.id))
+        await user_repo.update(user.id, pending_password_reset_jti=jti)
+        background_task.add_task(
+            PasswordResetService.send_reset_email, user.email, token
+        )
+
+    return {
+        "message": "If an account with that email exists, a password reset link has been sent."
+    }
+
+
+@auth_router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(
+    data: ResetPasswordRequest, request: Request, db: AsyncGenerator = Depends(get_db)
+) -> dict:
+    try:
+        payload = await PasswordResetService.decode_reset_token(data.token)
+    except jwt.PyJWTError:
+        raise HTTPException(400, detail="Invalid or expired reset link")
+
+    if payload.get("type") != RESET_TYPE:
+        raise HTTPException(400, detail="Invalid reset token")
+
+    token_repo = RevokedTokenRepository(db)
+    if await token_repo.exists(payload["jti"]):
+        raise HTTPException(400, detail="Reset link already used")
+
+    user_repo = UserRepository(db)
+    user = await user_repo.get(UUID(payload["sub"]))
+    if user is None or not user.is_active:
+        raise HTTPException(404, detail="User not found")
+
+    if user.pending_password_reset_jti != payload["jti"]:
+        raise HTTPException(
+            400, detail="Reset link has been superseded by a newer request"
+        )
+
+    new_hash = SecurityService.hash_password(data.new_password)
+    await user_repo.update(id=user.id, password_hash=new_hash)
+
+    expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+    try:
+        await token_repo.add(payload["jti"], expires_at)
+    except ValueError:
+        raise HTTPException(400, detail="Reset link already used")
+
+    return {"message": "Password has been reset"}

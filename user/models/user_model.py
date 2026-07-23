@@ -27,6 +27,9 @@ class UserModel(Base):
     pending_verification_jti: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True, default=None
     )
+    pending_password_reset_jti: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

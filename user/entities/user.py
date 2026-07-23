@@ -13,5 +13,6 @@ class User:
     is_active: bool
     is_verified: bool
     pending_verification_jti: Optional[str]
+    pending_password_reset_jti: Optional[str]
     created_at: datetime
     updated_at: datetime

@@ -32,10 +32,6 @@ create-schema = "scripts.create_schema:main"
 create-route = "scripts.create_route:main"
 create-all = "scripts.create_all:main"
 
-[tool.pyright]
-venvPath = "."
-venv = ".venv"
-
 [dependency-groups]
 dev = [
     "asgi-lifespan>=2.1.0",
@@ -57,3 +53,50 @@ package = true
 [tool.setuptools.packages.find]
 include = ["core*", "user*", "scripts*"]
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+exclude = ["alembic/versions", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC", "SIM", "RUF"]
+ignore = [
+    "B008",  # FastAPI's Depends() in defaults is the intended pattern
+    "S101",  # assert — allowed, see per-file-ignores for tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**"    = ["S101", "S105", "S106"]   # asserts + hardcoded test passwords
+"scripts/**"  = ["E501"]                   # scaffolding templates are long strings
+"alembic/**"  = ["E501", "F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["auth", "user", "core", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"                    # no @pytest.mark.asyncio on every test
+asyncio_default_fixture_loop_scope = "session"
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["auth", "user", "core"]
+omit = ["*/alembic/*", "*/__init__.py"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "alembic"]
+
+[tool.deptry]
+known_first_party = ["auth", "user", "core", "scripts"]
+
+[tool.deptry.per_rule_ignores]
+DEP002 = ["psycopg2-binary", "uvloop", "httptools"]  # used by drivers/uvicorn, not imported

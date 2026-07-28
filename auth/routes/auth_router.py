@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from typing import AsyncGenerator
 from uuid import UUID
 
 from authx import TokenPayload
@@ -12,8 +11,9 @@ from fastapi import (
     Response,
 )
 import jwt
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import auth
+from auth.dependencies import auth, get_revoked_token_repository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.schemas.auth_schema import (
     ForgotPasswordRequest,
@@ -31,6 +31,7 @@ from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
 from core.limiter import limiter
 from core.database import get_db
+from user.dependencies import get_user_repository
 from user.repositories.user_repository import UserRepository
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -42,9 +43,9 @@ async def login(
     data: LoginRequest,
     request: Request,
     response: Response,
-    db: AsyncGenerator = Depends(get_db),
+    user_repository: UserRepository = Depends(get_user_repository)
 ) -> LoginResponse:
-    user = await UserRepository(db).get_by_email(data.email)
+    user = await user_repository.get_by_email(data.email)
 
     if (
         user is None
@@ -75,12 +76,12 @@ async def protected(
 @limiter.limit("5/minute")
 async def refresh(
     request: Request,
-    db: AsyncGenerator = Depends(get_db),
+    user_repo: UserRepository = Depends(get_user_repository),
     payload: TokenPayload = Depends(
         auth.token_required(type="refresh", locations=["cookies"])
     ),
 ) -> LoginResponse:
-    user = await UserRepository(db).get(UUID(payload.sub))
+    user = await user_repo.get(UUID(payload.sub))
 
     if user is None or not user.is_active or not user.is_verified:
         raise HTTPException(401, detail="Invalid credentials")
@@ -96,7 +97,7 @@ async def logout(
     payload: TokenPayload = Depends(
         auth.token_required(type="access", locations=["headers"])
     ),
-    db: AsyncGenerator = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     await TokenService.revoke_tokens(request, payload, db)
     auth.unset_refresh_cookies(response)
@@ -106,7 +107,10 @@ async def logout(
 @auth_router.get("/verify-email")
 @limiter.limit("5/minute")
 async def verify_email(
-    token: str, request: Request, db: AsyncGenerator = Depends(get_db)
+    token: str,
+    request: Request, 
+    user_repo: UserRepository = Depends(get_user_repository),
+    token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository),
 ) -> dict:
     try:
         payload = await EmailVerificationService.decode_verification_token(token)
@@ -116,11 +120,9 @@ async def verify_email(
     if payload.get("type") != VERIFY_TYPE:
         raise HTTPException(400, detail="Invalid verification token")
 
-    token_repo = RevokedTokenRepository(db)
     if await token_repo.exists(payload["jti"]):
         raise HTTPException(400, detail="Verification link already used")
 
-    user_repo = UserRepository(db)
     user = await user_repo.get(UUID(payload["sub"]))
     if user is None:
         raise HTTPException(404, detail="User not found")
@@ -148,9 +150,8 @@ async def resend_verification(
     data: ResendVerificationRequest,
     request: Request,
     background_task: BackgroundTasks,
-    db: AsyncGenerator = Depends(get_db),
+    user_repo: UserRepository = Depends(get_user_repository)
 ) -> dict:
-    user_repo = UserRepository(db)
     user = await user_repo.get_by_email(data.email)
 
     if user is not None and not user.is_verified:
@@ -173,9 +174,8 @@ async def forgot_password(
     data: ForgotPasswordRequest,
     request: Request,
     background_task: BackgroundTasks,
-    db: AsyncGenerator = Depends(get_db),
+    user_repo: UserRepository = Depends(get_user_repository)
 ) -> dict:
-    user_repo = UserRepository(db)
     user = await user_repo.get_by_email(data.email)
 
     if user is not None and user.is_active:
@@ -193,7 +193,10 @@ async def forgot_password(
 @auth_router.post("/reset-password")
 @limiter.limit("5/minute")
 async def reset_password(
-    data: ResetPasswordRequest, request: Request, db: AsyncGenerator = Depends(get_db)
+   data: ResetPasswordRequest,
+   request: Request,
+   user_repo: UserRepository = Depends(get_user_repository),
+   token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository)
 ) -> dict:
     try:
         payload = await PasswordResetService.decode_reset_token(data.token)
@@ -203,11 +206,9 @@ async def reset_password(
     if payload.get("type") != RESET_TYPE:
         raise HTTPException(400, detail="Invalid reset token")
 
-    token_repo = RevokedTokenRepository(db)
     if await token_repo.exists(payload["jti"]):
         raise HTTPException(400, detail="Reset link already used")
 
-    user_repo = UserRepository(db)
     user = await user_repo.get(UUID(payload["sub"]))
     if user is None or not user.is_active:
         raise HTTPException(404, detail="User not found")

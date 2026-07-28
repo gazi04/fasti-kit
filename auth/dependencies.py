@@ -1,8 +1,9 @@
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
 from authx import AuthX, AuthXConfig, TokenPayload
 from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.database import AsyncSessionLocal, get_db
@@ -37,7 +38,10 @@ async def is_token_revoked(token: str, **kwargs: Any) -> bool:
     async with AsyncSessionLocal() as db:
         return await RevokedTokenRepository(db).exists(payload.jti)
 
-async def get_current_user(payload = Depends(auth.token_required()), db = Depends(get_db)) -> User:
+async def get_current_user(payload = Depends(auth.token_required()), db = Depends(get_db)) -> Optional[User]:
     return await UserRepository(db).get(UUID(payload.sub))
+
+def get_revoked_token_repository(db: AsyncSession = Depends(get_db)) -> RevokedTokenRepository:
+    return RevokedTokenRepository(db)
 
 auth.set_callback_token_blocklist(is_token_revoked)

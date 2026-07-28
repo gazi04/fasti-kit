@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Optional
+from typing import Optional
 from uuid import UUID
 
 from authx import TokenPayload
@@ -10,17 +10,18 @@ from fastapi import (
     Request,
     Response,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import auth
 from auth.services.email_verification_service import EmailVerificationService
 from auth.services.token_service import TokenService
 from core.limiter import limiter
 from core.database import get_db
+from user.dependencies import get_user_repository, get_user_service
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import (
     CreateUserRequest,
-    GetUserRequest,
     UserResponse,
     UpdateUserRequest,
 )
@@ -35,11 +36,9 @@ async def create_user(
     data: CreateUserRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncGenerator = Depends(get_db),
+    user_repo: UserRepository = Depends(get_user_repository),
+    service: UserService = Depends(get_user_service)
 ) -> User:
-    user_repo = UserRepository(db)
-    service = UserService(user_repo)
-
     try:
         user = await service.register(data)
     except ValueError:
@@ -60,14 +59,13 @@ async def create_user(
 
 @user_router.get("/get", response_model=UserResponse)
 async def get_user(
-    data: GetUserRequest,
-    db: AsyncGenerator = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     payload: TokenPayload = Depends(
         auth.token_required(type="access", locations=["headers"])
     ),
 ) -> Optional[User]:
-    service = UserService(UserRepository(db))
-    user = await service.get_by_email(data)
+    user_id = UUID(payload.sub)
+    user = await service.get(user_id)
 
     if user is None:
         raise HTTPException(404, "User not found")
@@ -78,13 +76,12 @@ async def get_user(
 @user_router.patch("/update", response_model=UserResponse)
 async def update_user(
     data: UpdateUserRequest,
-    db: AsyncGenerator = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     payload: TokenPayload = Depends(
         auth.token_required(type="access", locations=["headers"])
     ),
 ):
     user_id = UUID(payload.sub)
-    service = UserService(UserRepository(db))
 
     try:
         user = await service.update(user_id, data)
@@ -101,13 +98,14 @@ async def update_user(
 async def delete_user(
     request: Request,
     response: Response,
-    db: AsyncGenerator = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     payload: TokenPayload = Depends(
         auth.token_required(type="access", locations=["headers"])
     ),
 ):
     user_id = UUID(payload.sub)
-    deleted = await UserService(UserRepository(db)).delete(user_id)
+    deleted = await service.delete(user_id)
 
     if deleted is None:
         raise HTTPException(404, "User not found")

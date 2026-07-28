@@ -6,7 +6,6 @@ from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import (
     CreateUserRequest,
-    GetUserRequest,
     UpdateUserRequest,
 )
 
@@ -19,8 +18,8 @@ class UserService:
         password_hash = SecurityService.hash_password(data.password)
         return await self.repo.add(data.name, data.email, password_hash)
 
-    async def get_by_email(self, data: GetUserRequest) -> Optional[User]:
-        return await self.repo.get_by_email(data.email)
+    async def get(self, user_id: UUID) -> Optional[User]:
+        return await self.repo.get(user_id)
 
     async def update(self, user_id: UUID, data: UpdateUserRequest) -> Optional[User]:
         data.password = (

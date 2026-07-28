@@ -10,10 +10,6 @@ class CreateUserRequest(BaseModel):
     password: str
 
 
-class GetUserRequest(BaseModel):
-    email: str
-
-
 class UpdateUserRequest(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None

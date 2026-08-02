@@ -37,8 +37,10 @@ dev = [
     "asgi-lifespan>=2.1.0",
     "bandit>=1.9.4",
     "deptry>=0.25.1",
+    "detect-secrets>=1.5.0",
     "import-linter>=2.13",
     "pip-audit>=2.10.1",
+    "pre-commit>=4.6.1",
     "py-spy>=0.4.2",
     "pyright>=1.1.411",
     "pytest>=9.1.1",
@@ -99,4 +101,40 @@ exclude_dirs = [".venv", "tests", "alembic"]
 known_first_party = ["auth", "user", "core", "scripts"]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["psycopg2-binary", "uvloop", "httptools"]  # used by drivers/uvicorn, not imported
+DEP002 = ["psycopg2-binary", "uvloop", "httptools", "asyncpg"]  # used by drivers/uvicorn, not imported
+
+[tool.importlinter]
+root_packages = ["auth", "user", "core", "scripts"]
+# Required: the "entities stay DB-agnostic" contract forbids external packages.
+# Without this, lint-imports raises ValueError before checking anything.
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "DDD layers one-way"
+type = "layers"
+layers = ["routes", "services", "repositories", "models"]
+containers = ["auth", "user"]
+exhaustive = false  # dependencies/entities/schemas are deliberately unlayered
+
+[[tool.importlinter.contracts]]
+name = "entities stay DB-agnostic"
+type = "forbidden"
+source_modules = ["user.entities", "auth.entities"]
+forbidden_modules = ["sqlalchemy", "fastapi", "pydantic"]
+
+[[tool.importlinter.contracts]]
+name = "auth never directly touches user's routes, services or ORM models"
+type = "forbidden"
+source_modules = ["auth"]
+forbidden_modules = ["user.routes", "user.services", "user.models"]
+# Direct-only by necessity, not laziness: auth may use user.repositories, and
+# user.repositories imports user.models, so auth -> user.repositories ->
+# user.models is a structural chain that cannot be removed. Indirect
+# enforcement is preserved for user.routes by the next contract. Do not delete.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "auth never reaches user's HTTP layer, even transitively"
+type = "forbidden"
+source_modules = ["auth"]
+forbidden_modules = ["user.routes"]

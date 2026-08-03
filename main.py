@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Title", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 auth.handle_errors(app)
 
@@ -53,4 +53,4 @@ app.include_router(user_router, prefix="/api")
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, loop="uvloop", host="0.0.0.0", port=8000)
+    uvicorn.run(app, loop="uvloop", host="127.0.0.1", port=8000)

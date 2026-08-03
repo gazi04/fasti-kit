@@ -1,4 +1,4 @@
-import argparse
+import typer
 
 from scripts.create_domain import create_domain
 from scripts.create_entity import create_entity
@@ -10,6 +10,7 @@ from scripts.create_service import create_service
 
 
 def create_all(domain: str, name: str) -> None:
+    """Scaffold entity/model/repository/schema/service/route in one go."""
     create_domain(domain)
     create_entity(domain, name)
     create_model(domain, name)
@@ -20,14 +21,7 @@ def create_all(domain: str, name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Scaffold entity/model/repository/schema/service/route in one go"
-    )
-    parser.add_argument("domain")
-    parser.add_argument("name")
-    args = parser.parse_args()
-
-    create_all(args.domain, args.name)
+    typer.run(create_all)
 
 
 if __name__ == "__main__":

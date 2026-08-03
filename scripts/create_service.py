@@ -1,5 +1,6 @@
-import argparse
 from pathlib import Path
+
+import typer
 
 from scripts._boilerplate import (
     to_pascal_case,
@@ -38,6 +39,7 @@ class {class_name}Service:
 
 
 def create_service(domain: str, name: str) -> None:
+    """Scaffold a new service."""
     snake = to_snake_case(name)
     pascal = to_pascal_case(name)
 
@@ -51,12 +53,7 @@ def create_service(domain: str, name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scaffold a new service")
-    parser.add_argument("domain")
-    parser.add_argument("name")
-    args = parser.parse_args()
-
-    create_service(args.domain, args.name)
+    typer.run(create_service)
 
 
 if __name__ == "__main__":

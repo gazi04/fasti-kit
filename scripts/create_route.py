@@ -1,5 +1,6 @@
-import argparse
 from pathlib import Path
+
+import typer
 
 from scripts._boilerplate import (
     to_pascal_case,
@@ -81,6 +82,7 @@ async def delete_{snake}(
 
 
 def create_route(domain: str, name: str) -> None:
+    """Scaffold a new route."""
     snake = to_snake_case(name)
     pascal = to_pascal_case(name)
     route_var = f"{snake}_router"
@@ -109,12 +111,7 @@ def create_route(domain: str, name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scaffold a new route")
-    parser.add_argument("domain")
-    parser.add_argument("name")
-    args = parser.parse_args()
-
-    create_route(args.domain, args.name)
+    typer.run(create_route)
 
 
 if __name__ == "__main__":

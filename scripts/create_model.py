@@ -1,5 +1,6 @@
-import argparse
 from pathlib import Path
+
+import typer
 
 from scripts._boilerplate import (
     pluralize,
@@ -41,6 +42,7 @@ class {class_name}Model(Base):
 
 
 def create_model(domain: str, name: str) -> None:
+    """Scaffold a new ORM model."""
     snake = to_snake_case(name)
     pascal = to_pascal_case(name)
     table_name = pluralize(snake)
@@ -58,12 +60,7 @@ def create_model(domain: str, name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scaffold a new ORM model")
-    parser.add_argument("domain")
-    parser.add_argument("name")
-    args = parser.parse_args()
-
-    create_model(args.domain, args.name)
+    typer.run(create_model)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
-import argparse
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 DOMAIN_SUBFOLDERS = (
     "routes",
@@ -11,7 +13,10 @@ DOMAIN_SUBFOLDERS = (
 )
 
 
-def create_domain(name: str) -> None:
+def create_domain(
+    name: Annotated[str, typer.Argument(help="Domain name, e.g. 'book'")],
+) -> None:
+    """Scaffold a new DDD domain folder."""
     domain_dir = Path(name)
     for sub in DOMAIN_SUBFOLDERS:
         (domain_dir / sub).mkdir(parents=True, exist_ok=True)
@@ -19,11 +24,7 @@ def create_domain(name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scaffold a new DDD domain folder")
-    parser.add_argument("name", help="Domain name, e.g. 'book'")
-    args = parser.parse_args()
-
-    create_domain(args.name)
+    typer.run(create_domain)
 
 
 if __name__ == "__main__":

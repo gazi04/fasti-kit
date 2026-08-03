@@ -1,5 +1,6 @@
-import argparse
 from pathlib import Path
+
+import typer
 
 from scripts._boilerplate import (
     to_pascal_case,
@@ -41,6 +42,7 @@ class {class_name}Response(BaseModel):
 
 
 def create_schema(domain: str, name: str) -> None:
+    """Scaffold new schemas."""
     snake = to_snake_case(name)
     pascal = to_pascal_case(name)
 
@@ -61,12 +63,7 @@ def create_schema(domain: str, name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scaffold new schemas")
-    parser.add_argument("domain")
-    parser.add_argument("name")
-    args = parser.parse_args()
-
-    create_schema(args.domain, args.name)
+    typer.run(create_schema)
 
 
 if __name__ == "__main__":

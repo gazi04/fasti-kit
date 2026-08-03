@@ -10,3 +10,15 @@ wheels/
 .venv
 
 .env
+
+# Local artifacts / tool caches
+cookies.txt
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / assistant
+.obsidian/
+.idea/
+.vscode/

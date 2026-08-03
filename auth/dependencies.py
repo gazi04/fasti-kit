@@ -2,7 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from authx import AuthX, AuthXConfig, TokenPayload
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
@@ -49,6 +49,19 @@ def get_revoked_token_repository(
     db: AsyncSession = Depends(get_db),
 ) -> RevokedTokenRepository:
     return RevokedTokenRepository(db)
+
+
+def require_scopes(*required: str, all_required: bool = True):
+    async def _check(
+        payload: TokenPayload = Depends(
+            auth.token_required(type="access", locations=["headers"])
+        ),
+    ) -> TokenPayload:
+        if not payload.has_scopes(*required, all_required=all_required):
+            raise HTTPException(403, detail="Insufficient permissions")
+        return payload
+
+    return _check
 
 
 auth.set_callback_token_blocklist(is_token_revoked)

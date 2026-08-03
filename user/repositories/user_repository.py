@@ -88,6 +88,7 @@ class UserRepository:
             email=model.email,
             full_name=model.full_name,
             password_hash=model.password_hash,
+            scopes=model.scopes,
             is_active=model.is_active,
             is_verified=model.is_verified,
             pending_verification_jti=model.pending_verification_jti,

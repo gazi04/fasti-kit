@@ -13,7 +13,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import auth, get_revoked_token_repository
+from auth.dependencies import auth, get_revoked_token_repository, require_scopes
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.schemas.auth_schema import (
     ForgotPasswordRequest,
@@ -55,7 +55,7 @@ async def login(
     ):
         raise HTTPException(401, detail="Invalid credentials")
 
-    token = auth.create_access_token(uid=str(user.id))
+    token = auth.create_access_token(uid=str(user.id), scopes=user.scopes.split())
     refresh_token = auth.create_refresh_token(uid=str(user.id))
 
     auth.set_refresh_cookies(refresh_token, response)
@@ -65,9 +65,7 @@ async def login(
 
 @auth_router.get("/protected")
 async def protected(
-    payload: TokenPayload = Depends(
-        auth.token_required(type="access", locations=["headers"])
-    ),
+    payload: TokenPayload = Depends(require_scopes("admin:read")),
 ):
     return {"user": payload.sub}
 
@@ -86,7 +84,9 @@ async def refresh(
     if user is None or not user.is_active or not user.is_verified:
         raise HTTPException(401, detail="Invalid credentials")
 
-    new_access_token = auth.create_access_token(uid=payload.sub)
+    new_access_token = auth.create_access_token(
+        uid=payload.sub, scopes=user.scopes.split()
+    )
     return LoginResponse(access_token=new_access_token)
 
 

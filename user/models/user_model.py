@@ -20,6 +20,9 @@ class UserModel(Base):
     )
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    scopes: Mapped[str] = mapped_column(
+        String, default="users:read users:write", nullable=False
+    )
     full_name: Mapped[str] = mapped_column(String(255))
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 

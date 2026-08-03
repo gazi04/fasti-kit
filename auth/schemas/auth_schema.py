@@ -12,7 +12,7 @@ class LoginResponse(BaseModel):
     """The public API response contract: bearer token delivered in the response body."""
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 -- OAuth2 token type, not a credential
 
 
 class ResendVerificationRequest(BaseModel):

@@ -1,7 +1,7 @@
 from .user_schema import (
     CreateUserRequest,
-    UserResponse,
     UpdateUserRequest,
+    UserResponse,
 )
 
-__all__ = ["CreateUserRequest", "UserResponse", "UpdateUserRequest"]
+__all__ = ["CreateUserRequest", "UpdateUserRequest", "UserResponse"]

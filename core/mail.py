@@ -1,18 +1,18 @@
 from functools import lru_cache
-from typing import Optional
 
 from fastapi_mail import (
-    FastMail,
     ConnectionConfig,
+    FastMail,
     MessageSchema,
     MessageType,
     NameEmail,
 )
 from pydantic import SecretStr, TypeAdapter
+
 from core.setting import get_settings
 
 settings = get_settings()
-_fast_mail: Optional[FastMail] = None
+_fast_mail: FastMail | None = None
 _recipients_adapter = TypeAdapter(list[NameEmail])
 
 

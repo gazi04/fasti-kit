@@ -1,12 +1,11 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, String
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
-
-import uuid
 
 
 class RevokedTokenModel(Base):

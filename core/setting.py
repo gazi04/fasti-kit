@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import Optional
 
 from authx.types import AlgorithmType
 from pydantic import EmailStr, field_validator
@@ -7,9 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    db_user: Optional[str] = None
-    db_password: Optional[str] = None
-    db_name: Optional[str] = None
+    db_user: str | None = None
+    db_password: str | None = None
+    db_name: str | None = None
     database_url: str
 
     allowed_origins: list[str]
@@ -20,10 +19,10 @@ class Settings(BaseSettings):
     jwt_cookie_secure: bool = False
     jwt_algorithm: AlgorithmType = "HS256"
 
-    mail_username: Optional[str] = None
-    mail_password: Optional[str] = None
+    mail_username: str | None = None
+    mail_password: str | None = None
     mail_from: EmailStr
-    mail_from_name: Optional[str] = None
+    mail_from_name: str | None = None
     mail_port: int
     mail_server: str
     mail_starttls: bool

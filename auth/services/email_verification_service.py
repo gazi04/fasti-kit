@@ -1,10 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
-from core.mail import send_email
-from core.setting import get_settings
 
 import jwt
+
+from core.mail import send_email
+from core.setting import get_settings
 
 settings = get_settings()
 VERIFY_TOKEN_EXPIRY = timedelta(hours=24)
@@ -14,7 +15,7 @@ VERIFY_TYPE = "email_verify"
 class EmailVerificationService:
     @staticmethod
     def create_verification_token(user_id: str) -> tuple[str, str]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         jti = uuid4().hex
         payload = {
             "sub": user_id,

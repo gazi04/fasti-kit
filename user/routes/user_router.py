@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from authx import TokenPayload
@@ -15,15 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.dependencies import auth
 from auth.services.email_verification_service import EmailVerificationService
 from auth.services.token_service import TokenService
-from core.limiter import limiter
 from core.database import get_db
+from core.limiter import limiter
 from user.dependencies import get_user_repository, get_user_service
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import (
     CreateUserRequest,
-    UserResponse,
     UpdateUserRequest,
+    UserResponse,
 )
 from user.services.user_service import UserService
 
@@ -37,19 +36,21 @@ async def create_user(
     request: Request,
     background_tasks: BackgroundTasks,
     user_repo: UserRepository = Depends(get_user_repository),
-    service: UserService = Depends(get_user_service)
+    service: UserService = Depends(get_user_service),
 ) -> User:
     try:
         user = await service.register(data)
-    except ValueError:
-        raise HTTPException(409, "Email already in use")
+    except ValueError as err:
+        raise HTTPException(409, "Email already in use") from err
 
     token, jti = EmailVerificationService.create_verification_token(str(user.id))
 
     try:
         await user_repo.update(user.id, pending_verification_jti=jti)
-    except Exception:
-        raise HTTPException(500, detail="Failed to schedule verification email")
+    except Exception as err:
+        raise HTTPException(
+            500, detail="Failed to schedule verification email"
+        ) from err
 
     background_tasks.add_task(
         EmailVerificationService.send_verification_email, user.email, token
@@ -63,7 +64,7 @@ async def get_user(
     payload: TokenPayload = Depends(
         auth.token_required(type="access", locations=["headers"])
     ),
-) -> Optional[User]:
+) -> User | None:
     user_id = UUID(payload.sub)
     user = await service.get(user_id)
 
@@ -85,8 +86,8 @@ async def update_user(
 
     try:
         user = await service.update(user_id, data)
-    except ValueError:
-        raise HTTPException(409, "Email already in use")
+    except ValueError as err:
+        raise HTTPException(409, "Email already in use") from err
 
     if user is None:
         raise HTTPException(404, "User not found")

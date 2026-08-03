@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -15,7 +15,7 @@ RESET_TYPE = "password_reset"
 class PasswordResetService:
     @staticmethod
     def create_reset_token(user_id: str) -> tuple[str, str]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         jti = uuid4().hex
         payload = {
             "sub": user_id,

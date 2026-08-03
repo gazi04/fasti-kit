@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from auth.services.security_service import SecurityService
@@ -18,16 +17,16 @@ class UserService:
         password_hash = SecurityService.hash_password(data.password)
         return await self.repo.add(data.name, data.email, password_hash)
 
-    async def get(self, user_id: UUID) -> Optional[User]:
+    async def get(self, user_id: UUID) -> User | None:
         return await self.repo.get(user_id)
 
-    async def update(self, user_id: UUID, data: UpdateUserRequest) -> Optional[User]:
+    async def update(self, user_id: UUID, data: UpdateUserRequest) -> User | None:
         data.password = (
             SecurityService.hash_password(data.password) if data.password else None
         )
         return await self.repo.update(id=user_id, **data.model_dump(exclude_unset=True))
 
-    async def delete(self, user_id: UUID, force: bool = False) -> Optional[User]:
+    async def delete(self, user_id: UUID, force: bool = False) -> User | None:
         if force:
             return await self.repo.force_delete(user_id)
 

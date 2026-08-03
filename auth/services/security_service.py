@@ -1,4 +1,4 @@
-from bcrypt import checkpw, hashpw, gensalt
+from bcrypt import checkpw, gensalt, hashpw
 
 
 class SecurityService:

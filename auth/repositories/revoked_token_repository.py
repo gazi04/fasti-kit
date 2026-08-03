@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -18,9 +18,9 @@ class RevokedTokenRepository:
 
         try:
             await self.db.commit()
-        except IntegrityError:
+        except IntegrityError as err:
             await self.db.rollback()
-            raise ValueError("Token already used")
+            raise ValueError("Token already used") from err
 
         await self.db.refresh(model)
         return self._to_entity(model)
@@ -29,7 +29,7 @@ class RevokedTokenRepository:
         result = await self.db.scalar(
             select(RevokedTokenModel).where(
                 RevokedTokenModel.jti == jti,
-                RevokedTokenModel.expires_at > datetime.now(timezone.utc),
+                RevokedTokenModel.expires_at > datetime.now(UTC),
             )
         )
 

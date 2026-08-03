@@ -1,3 +1,5 @@
+import contextlib
+
 from authx import JWTDecodeError, TokenPayload
 from fastapi import Request
 
@@ -13,14 +15,12 @@ class TokenService:
     async def revoke_tokens(request: Request, payload: TokenPayload, db):
         repo = RevokedTokenRepository(db)
         if payload.jti is not None:
-            try:
+            with contextlib.suppress(ValueError):
                 await repo.add(payload.jti, payload.expiry_datetime)
-            except ValueError:
-                pass
 
         refresh_token = request.cookies.get(auth.config.JWT_REFRESH_COOKIE_NAME)
         if refresh_token:
-            try:
+            with contextlib.suppress(JWTDecodeError):
                 refresh_payload = TokenPayload.decode(
                     refresh_token,
                     key=settings.jwt_secret_key,
@@ -29,5 +29,3 @@ class TokenService:
                 )
                 if refresh_payload.jti is not None:
                     await repo.add(refresh_payload.jti, refresh_payload.expiry_datetime)
-            except JWTDecodeError:
-                pass

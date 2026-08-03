@@ -1,5 +1,6 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import (
     AsyncAttrs,
     AsyncSession,
@@ -29,7 +30,7 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 
 @asynccontextmanager
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session() -> AsyncGenerator[AsyncSession]:
     db = AsyncSessionLocal()
     try:
         yield db

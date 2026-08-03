@@ -1,4 +1,5 @@
 from sqlalchemy import text
+
 from core.database import engine
 from core.setting import get_settings
 
@@ -13,11 +14,11 @@ async def check_database() -> None:
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-    except Exception as e:
+    except Exception as err:
         raise StartupCheckError(
             f"Cannot reach Postgres at {settings.database_url!r}"
             f"Is it running? Try: docker comp up -d"
-        )
+        ) from err
 
 
 async def check_mail_config() -> None:

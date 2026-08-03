@@ -1,7 +1,7 @@
-from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, EmailStr
 import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, EmailStr
 
 
 class CreateUserRequest(BaseModel):
@@ -11,9 +11,9 @@ class CreateUserRequest(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    full_name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    password: Optional[str] = None
+    full_name: str | None = None
+    email: EmailStr | None = None
+    password: str | None = None
 
 
 class UserResponse(BaseModel):

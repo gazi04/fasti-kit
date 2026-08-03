@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -21,7 +20,7 @@ class UserRepository:
         await self.db.refresh(model)
         return self._to_entity(model)
 
-    async def get(self, id: UUID) -> Optional[User]:
+    async def get(self, id: UUID) -> User | None:
         result = await self.db.scalar(select(UserModel).where(UserModel.id == id))
 
         if result is None:
@@ -29,7 +28,7 @@ class UserRepository:
 
         return self._to_entity(result)
 
-    async def get_by_email(self, email: str) -> Optional[User]:
+    async def get_by_email(self, email: str) -> User | None:
         result = await self.db.scalar(select(UserModel).where(UserModel.email == email))
 
         if not result:
@@ -37,7 +36,7 @@ class UserRepository:
 
         return self._to_entity(result)
 
-    async def update(self, id: UUID, **fields) -> Optional[User]:
+    async def update(self, id: UUID, **fields) -> User | None:
         user = await self.db.get(UserModel, id)
 
         if user is None:
@@ -53,7 +52,7 @@ class UserRepository:
         await self.db.refresh(user)
         return self._to_entity(user)
 
-    async def delete(self, id: UUID) -> Optional[User]:
+    async def delete(self, id: UUID) -> User | None:
         user = await self.db.get(UserModel, id)
 
         if user is None:
@@ -64,7 +63,7 @@ class UserRepository:
         await self.db.refresh(user)
         return self._to_entity(user)
 
-    async def force_delete(self, id: UUID) -> Optional[User]:
+    async def force_delete(self, id: UUID) -> User | None:
         user = await self.db.get(UserModel, id)
 
         if user is None:
@@ -78,9 +77,9 @@ class UserRepository:
     async def _commit_or_raise(self) -> None:
         try:
             await self.db.commit()
-        except IntegrityError:
+        except IntegrityError as err:
             await self.db.rollback()
-            raise ValueError("Email taken")
+            raise ValueError("Email taken") from err
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:

@@ -1,7 +1,6 @@
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
-import uuid
 
 
 @dataclass
@@ -12,7 +11,7 @@ class User:
     password_hash: str
     is_active: bool
     is_verified: bool
-    pending_verification_jti: Optional[str]
-    pending_password_reset_jti: Optional[str]
+    pending_verification_jti: str | None
+    pending_password_reset_jti: str | None
     created_at: datetime
     updated_at: datetime

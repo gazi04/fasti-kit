@@ -1,16 +1,15 @@
-from typing import Optional
+import uuid
+from datetime import UTC, datetime
 
-from core.database import Base
-from datetime import datetime, timezone
 from sqlalchemy import (
-    String,
     Boolean,
     DateTime,
+    String,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-import uuid
+from core.database import Base
 
 
 class UserModel(Base):
@@ -24,18 +23,18 @@ class UserModel(Base):
     full_name: Mapped[str] = mapped_column(String(255))
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    pending_verification_jti: Mapped[Optional[str]] = mapped_column(
+    pending_verification_jti: Mapped[str | None] = mapped_column(
         String(255), nullable=True, default=None
     )
-    pending_password_reset_jti: Mapped[Optional[str]] = mapped_column(
+    pending_password_reset_jti: Mapped[str | None] = mapped_column(
         String(255), nullable=True, default=None
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

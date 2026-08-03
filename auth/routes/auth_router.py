@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
+import jwt
 from authx import TokenPayload
 from fastapi import (
     APIRouter,
@@ -10,7 +11,6 @@ from fastapi import (
     Request,
     Response,
 )
-import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import auth, get_revoked_token_repository
@@ -29,8 +29,8 @@ from auth.services.email_verification_service import (
 from auth.services.password_reset_service import RESET_TYPE, PasswordResetService
 from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
-from core.limiter import limiter
 from core.database import get_db
+from core.limiter import limiter
 from user.dependencies import get_user_repository
 from user.repositories.user_repository import UserRepository
 
@@ -43,7 +43,7 @@ async def login(
     data: LoginRequest,
     request: Request,
     response: Response,
-    user_repository: UserRepository = Depends(get_user_repository)
+    user_repository: UserRepository = Depends(get_user_repository),
 ) -> LoginResponse:
     user = await user_repository.get_by_email(data.email)
 
@@ -108,14 +108,14 @@ async def logout(
 @limiter.limit("5/minute")
 async def verify_email(
     token: str,
-    request: Request, 
+    request: Request,
     user_repo: UserRepository = Depends(get_user_repository),
     token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository),
 ) -> dict:
     try:
         payload = await EmailVerificationService.decode_verification_token(token)
-    except jwt.PyJWTError:
-        raise HTTPException(400, detail="Invalid or expired verification link")
+    except jwt.PyJWTError as err:
+        raise HTTPException(400, detail="Invalid or expired verification link") from err
 
     if payload.get("type") != VERIFY_TYPE:
         raise HTTPException(400, detail="Invalid verification token")
@@ -134,12 +134,12 @@ async def verify_email(
 
     await user_repo.update(id=user.id, is_verified=True)
 
-    expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+    expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
 
     try:
         await token_repo.add(payload["jti"], expires_at)
-    except ValueError:
-        raise HTTPException(400, detail="Verification link already used")
+    except ValueError as err:
+        raise HTTPException(400, detail="Verification link already used") from err
 
     return {"message": "Email verified"}
 
@@ -150,7 +150,7 @@ async def resend_verification(
     data: ResendVerificationRequest,
     request: Request,
     background_task: BackgroundTasks,
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
 ) -> dict:
     user = await user_repo.get_by_email(data.email)
 
@@ -164,7 +164,10 @@ async def resend_verification(
         )
 
     return {
-        "message": "If an account with that email exists and is unverified, a verification link has been sent."
+        "message": (
+            "If an account with that email exists and is unverified, "
+            "a verification link has been sent."
+        )
     }
 
 
@@ -174,7 +177,7 @@ async def forgot_password(
     data: ForgotPasswordRequest,
     request: Request,
     background_task: BackgroundTasks,
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
 ) -> dict:
     user = await user_repo.get_by_email(data.email)
 
@@ -186,22 +189,24 @@ async def forgot_password(
         )
 
     return {
-        "message": "If an account with that email exists, a password reset link has been sent."
+        "message": (
+            "If an account with that email exists, a password reset link has been sent."
+        )
     }
 
 
 @auth_router.post("/reset-password")
 @limiter.limit("5/minute")
 async def reset_password(
-   data: ResetPasswordRequest,
-   request: Request,
-   user_repo: UserRepository = Depends(get_user_repository),
-   token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository)
+    data: ResetPasswordRequest,
+    request: Request,
+    user_repo: UserRepository = Depends(get_user_repository),
+    token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository),
 ) -> dict:
     try:
         payload = await PasswordResetService.decode_reset_token(data.token)
-    except jwt.PyJWTError:
-        raise HTTPException(400, detail="Invalid or expired reset link")
+    except jwt.PyJWTError as err:
+        raise HTTPException(400, detail="Invalid or expired reset link") from err
 
     if payload.get("type") != RESET_TYPE:
         raise HTTPException(400, detail="Invalid reset token")
@@ -221,10 +226,10 @@ async def reset_password(
     new_hash = SecurityService.hash_password(data.new_password)
     await user_repo.update(id=user.id, password_hash=new_hash)
 
-    expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+    expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
     try:
         await token_repo.add(payload["jti"], expires_at)
-    except ValueError:
-        raise HTTPException(400, detail="Reset link already used")
+    except ValueError as err:
+        raise HTTPException(400, detail="Reset link already used") from err
 
     return {"message": "Password has been reset"}

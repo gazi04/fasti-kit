@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from authx.types import AlgorithmType
 from pydantic import EmailStr, field_validator
@@ -6,6 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    environment: Literal["local", "production"] = "local"
+
     db_user: str | None = None
     db_password: str | None = None
     db_name: str | None = None

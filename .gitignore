@@ -17,8 +17,13 @@ cookies.txt
 .pytest_cache/
 .coverage
 htmlcov/
+.grimp_cache/
+.import_linter_cache/
 
 # Editor / assistant
 .obsidian/
 .idea/
 .vscode/
+
+
+logs/

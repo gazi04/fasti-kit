@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,8 @@ from slowapi.errors import RateLimitExceeded
 from auth.dependencies import auth
 from auth.routes import auth_router
 from core.limiter import limiter
+from core.logging.setup import setup_logging
+from core.middlewares.correlation import CorrelationIdMiddleware
 from core.setting import get_settings
 from core.startup_checks import (
     StartupCheckError,
@@ -18,19 +21,23 @@ from core.startup_checks import (
 from user.routes import user_router
 
 settings = get_settings()
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info(f"Application starting up... Environment: {settings.environment}")
     try:
         await check_database()
         await check_mail_config()
         await check_jwt_config()
     except StartupCheckError as e:
-        print(f"\n[STARTUP FAILED]: {e}")
+        logger.error(f"Startup checks failed: {e}")
         raise
 
     yield
+    logger.info("Application shutting down...")
 
 
 app = FastAPI(title="Title", lifespan=lifespan)
@@ -39,6 +46,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 
 auth.handle_errors(app)
 
+app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,

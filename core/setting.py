@@ -2,7 +2,7 @@ from functools import lru_cache
 from typing import Literal
 
 from authx.types import AlgorithmType
-from pydantic import EmailStr, field_validator
+from pydantic import EmailStr, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     mail_server: str
     mail_starttls: bool
     mail_ssl_tls: bool
+
+    redis_host: str = "127.0.0.1"
+    redis_port: int = 6379
+    redis_db: int = 0
+
+    @computed_field
+    @property
+    def redis_url(self) -> str:
+        return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

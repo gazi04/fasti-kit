@@ -28,6 +28,14 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
+  redis:
+    image: redis:7-alpine
+    container_name: fasti-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+
 volumes:
   postgres_data:
   pgadmin_data:

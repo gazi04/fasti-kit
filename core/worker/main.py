@@ -1,10 +1,16 @@
+import logging
+
 from core.queue import task_queue
 
 from .tasks import process_welcome_email
 
-# SAQ looks for a dictionary named 'settings' by default
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | WORKER | %(levelname)s | %(message)s",
+    force=True
+)
+
 settings = {
     "queue": task_queue,
     "functions": [process_welcome_email],
-    "concurrency": 10,  # Number of jobs to process concurrently
+    "concurrency": 10,
 }

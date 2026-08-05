@@ -36,6 +36,14 @@ services:
     restart: unless-stopped
     command: redis-server --save 60 1 --loglevel warning
 
+  dozzle:
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 8008:8080
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   pgadmin_data:

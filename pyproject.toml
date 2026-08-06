@@ -54,6 +54,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.21",
+    "watchfiles>=1.2.0",
 ]
 
 [tool.uv]

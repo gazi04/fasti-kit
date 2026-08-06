@@ -26,6 +26,10 @@ dependencies = [
     "aiohttp>=3.14.3",
 ]
 
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project.scripts]
 create-domain = "scripts.create_domain:main"
 create-entity = "scripts.create_entity:main"
@@ -56,7 +60,7 @@ dev = [
 package = true
 
 [tool.setuptools.packages.find]
-include = ["core*", "user*", "scripts*"]
+include = ["auth*", "core*", "user*", "scripts*"]
 
 [tool.pyright]
 venvPath = "."

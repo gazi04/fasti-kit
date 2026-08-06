@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v9
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
           enable-cache: true
@@ -33,9 +33,6 @@ jobs:
 
       - run: uv sync --all-groups
 
-      # EXPECTED RED until the outstanding ruff violations are cleared. This is
-      # a debt counter, not a broken pipeline. Do not add continue-on-error --
-      # it reports job success while a check failed.
       - name: pre-commit
         if: ${{ !cancelled() }}
         run: uv run pre-commit run --all-files --show-diff-on-failure
@@ -51,12 +48,3 @@ jobs:
       - name: deptry
         if: ${{ !cancelled() }}
         run: uv run deptry .
-
-      # TODO(rollout step 3): enable once tests/ exists. Omitted on purpose --
-      # there are zero tests today, so `pytest --cov` exits 1 on the
-      # coverage.report fail_under=70 gate regardless of code correctness, and
-      # plain `pytest` exits 5 (nothing collected). A step that can only fail
-      # is noise, not signal. See docs/tooling/tooling-recommendations.md §6.4.
-      # - name: pytest
-      #   if: ${{ !cancelled() }}
-      #   run: uv run pytest --cov --cov-report=term-missing

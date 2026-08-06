@@ -1,22 +1,25 @@
 default:
-    @just --list
+  @just --list
 
 dev:
-    uv run uvicorn core.main:app --reload
+  uv run uvicorn main:app --reload
+
+worker:
+  uv run watchfiles "saq core.worker.main.settings" core/ user/ auth/
 
 lint:
-    uv run ruff check .
-    uv run pyright
+  uv run ruff check .
+  uv run pyright
 
 format:
-    uv run ruff format .
+  uv run ruff format .
 
 test:
-    uv run pytest --cov
+  uv run pytest --cov
 
 pre-commit:
-    uv run pre-commit run --all-files
+  uv run pre-commit run --all-files
 
 migrate message="":
-    uv run alembic revision --autogenerate -m "{{message}}"
-    uv run alembic upgrade head
+  uv run alembic revision --autogenerate -m "{{message}}"
+  uv run alembic upgrade head

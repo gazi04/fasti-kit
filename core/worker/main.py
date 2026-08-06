@@ -2,7 +2,7 @@ import logging
 
 from core.queue import task_queue
 
-from .tasks import process_welcome_email
+from .tasks import process_welcome_email, send_email_task
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,6 +12,6 @@ logging.basicConfig(
 
 settings = {
     "queue": task_queue,
-    "functions": [process_welcome_email],
+    "functions": [process_welcome_email, send_email_task],
     "concurrency": 10,
 }

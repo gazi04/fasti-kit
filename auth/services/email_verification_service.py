@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import jwt
 
-from core.mail import send_email
+from core.queue import task_queue
 from core.setting import get_settings
 
 settings = get_settings()
@@ -33,7 +33,12 @@ class EmailVerificationService:
     async def send_verification_email(email: str, token: str) -> None:
         link = f"{settings.backend_url}/api/auth/verify-email?token={token}"
         body = f'<p>Click to verify your account: <a href="{link}">{link}</a></p>'
-        await send_email(subject="Verify your email", recipients=[email], body=body)
+        await task_queue.enqueue(
+            "send_email_task",
+            subject="Verify your email",
+            recipients=[email],
+            body=body,
+        )
 
     @staticmethod
     async def decode_verification_token(token: str) -> dict[str, Any]:

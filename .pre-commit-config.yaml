@@ -34,3 +34,10 @@ repos:
         language: system
         files: \.(py|toml)$
         pass_filenames: false
+
+      - id: alembic-check
+        name: check missing migrations
+        entry: uv run alembic check
+        language: system
+        always_run: true
+        pass_filenames: false

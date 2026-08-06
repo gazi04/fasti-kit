@@ -39,7 +39,6 @@ create-all = "scripts.create_all:main"
 [dependency-groups]
 dev = [
     "asgi-lifespan>=2.1.0",
-    "bandit>=1.9.4",
     "deptry>=0.25.1",
     "detect-secrets>=1.5.0",
     "import-linter>=2.13",
@@ -97,9 +96,6 @@ omit = ["*/alembic/*", "*/__init__.py"]
 fail_under = 70
 show_missing = true
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
-
-[tool.bandit]
-exclude_dirs = [".venv", "tests", "alembic"]
 
 [tool.deptry]
 known_first_party = ["auth", "user", "core", "scripts"]

@@ -1,0 +1,15 @@
+http://api.fasti.localhost {
+    reverse_proxy host.docker.internal:8000
+}
+
+http://mail.fasti.localhost {
+    reverse_proxy mailpit:8025
+}
+
+http://db.fasti.localhost {
+    reverse_proxy pgadmin:80
+}
+
+http://logs.fasti.localhost {
+    reverse_proxy dozzle:8080
+}

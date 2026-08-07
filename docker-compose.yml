@@ -59,7 +59,20 @@ services:
       - 8008:8080
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: fasti_gateway
+    ports:
+      - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   pgadmin_data:
   mailpit_data:
+  caddy_data:

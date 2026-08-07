@@ -2,7 +2,7 @@ default:
   @just --list
 
 dev:
-  uv run uvicorn main:app --reload
+  uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 worker:
   uv run watchfiles "saq core.worker.main.settings" core/ user/ auth/

@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 
 from auth.dependencies import auth
 from auth.routes import auth_router
+from core.expection import DomainException, domain_exception_handler
 from core.limiter import limiter
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import CorrelationIdMiddleware
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Title", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+app.add_exception_handler(DomainException, domain_exception_handler)
 
 auth.handle_errors(app)
 

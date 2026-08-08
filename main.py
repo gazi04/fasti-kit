@@ -12,6 +12,7 @@ from core.exception import DomainException, domain_exception_handler
 from core.limiter import limiter
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import CorrelationIdMiddleware
+from core.middlewares.n1_detector import N1DetectorMiddleware
 from core.setting import get_settings
 from core.startup_checks import (
     StartupCheckError,
@@ -44,11 +45,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Title", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
-app.add_exception_handler(DomainException, domain_exception_handler)
+app.add_exception_handler(DomainException, domain_exception_handler)  # type: ignore[arg-type]
 
 auth.handle_errors(app)
 
 app.add_middleware(CorrelationIdMiddleware)
+
+if settings.environment == "local":
+    app.add_middleware(N1DetectorMiddleware, threshold=10)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,

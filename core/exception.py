@@ -1,3 +1,7 @@
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+
 class DomainException(Exception):
     """
     Base exception for all domain-level errors.
@@ -29,3 +33,17 @@ class UnauthorizedActionError(DomainException):
         super().__init__(
             detail=detail, status_code=403, type_str="errors/unauthorized-action"
         )
+
+
+async def domain_exception_handler(
+    request: Request, exc: DomainException
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "type": exc.type_str,
+            "title": "Request error",
+            "status": exc.status_code,
+            "detail": exc.detail,
+        },
+    )

@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 
 from auth.dependencies import auth
 from auth.routes import auth_router
-from core.expection import DomainException, domain_exception_handler
+from core.exception import DomainException, domain_exception_handler
 from core.limiter import limiter
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import CorrelationIdMiddleware

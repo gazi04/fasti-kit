@@ -11,11 +11,14 @@ lint:
   uv run ruff check .
   uv run pyright
 
+lint-fix:
+  uv run ruff check --fix .
+
 format:
   uv run ruff format .
 
 test:
-  uv run pytest --cov
+  uv run python -m pytest --cov
 
 pre-commit:
   uv run pre-commit run --all-files

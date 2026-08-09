@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -64,6 +65,8 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
+
+Instrumentator().instrument(app).expose(app)
 
 if __name__ == "__main__":
     import uvicorn

@@ -11,7 +11,7 @@ async def test_a_transactional_write(db):
     """
     user = UserModel(
         email="test_isolation_check@example.com",
-        password_hash="fakehash",  # noqa: S106
+        password_hash="fakehash",
         full_name="Isolation Check User",
         scopes="users:read",
     )
@@ -45,7 +45,7 @@ async def test_c_async_session_local_leakage(db):
 
     user = UserModel(
         email="test_leakage_check@example.com",
-        password_hash="fakehash",  # noqa: S106
+        password_hash="fakehash",
         full_name="Leakage Check User",
         scopes="users:read",
     )

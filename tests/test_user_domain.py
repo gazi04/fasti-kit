@@ -167,12 +167,12 @@ async def test_service_register_hashes_password(db) -> None:
     data = CreateUserRequest(
         name="Grace Hash",
         email=_make_email(),
-        password="plaintext",  # noqa: S106
+        password="plaintext",
     )
 
     user = await service.register(data)
 
-    assert user.password_hash != "plaintext"  # noqa: S105
+    assert user.password_hash != "plaintext"
     assert user.password_hash.startswith("$2b$")
 
 
@@ -202,10 +202,10 @@ async def test_service_update_hashes_new_password(db) -> None:
     email = _make_email()
     created = await repo.add("Iris Update", email, "old_hash")
 
-    data = UpdateUserRequest(password="new_plain")  # noqa: S106
+    data = UpdateUserRequest(password="new_plain")
     updated = await service.update(created.id, data)
     assert updated is not None
-    assert updated.password_hash != "new_plain"  # noqa: S105
+    assert updated.password_hash != "new_plain"
     assert updated.password_hash.startswith("$2b$")
 
 

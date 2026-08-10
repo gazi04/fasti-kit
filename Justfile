@@ -2,6 +2,7 @@ default:
   @just --list
 
 dev:
+  docker-compose up -d postgres redis mailpit dozzle caddy
   uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 worker:
@@ -26,3 +27,6 @@ pre-commit:
 migrate message="":
   uv run alembic revision --autogenerate -m "{{message}}"
   uv run alembic upgrade head
+
+docker:
+  docker-compose up -d

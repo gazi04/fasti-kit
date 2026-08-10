@@ -9,7 +9,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from auth.dependencies import auth
-from auth.routes import auth_router
+from core.api_versions import v1_router
 from core.exception import DomainException, domain_exception_handler
 from core.limiter import limiter
 from core.logging.setup import setup_logging
@@ -22,7 +22,6 @@ from core.startup_checks import (
     check_jwt_config,
     check_mail_config,
 )
-from user.routes import user_router
 
 settings = get_settings()
 setup_logging()
@@ -65,8 +64,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router, prefix="/api")
-app.include_router(user_router, prefix="/api")
+app.include_router(v1_router)
 
 Instrumentator().instrument(app).expose(app)
 

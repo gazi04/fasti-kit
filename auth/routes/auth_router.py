@@ -30,11 +30,12 @@ from auth.services.password_reset_service import RESET_TYPE, PasswordResetServic
 from auth.services.security_service import SecurityService
 from auth.services.token_service import TokenService
 from core.database import get_db
+from core.deprecation import DeprecationRoute, deprecated
 from core.limiter import limiter
 from user.dependencies import get_user_repository
 from user.repositories.user_repository import UserRepository
 
-auth_router = APIRouter(prefix="/auth", tags=["Auth"])
+auth_router = APIRouter(prefix="/auth", tags=["Auth"], route_class=DeprecationRoute)
 
 
 @auth_router.post("/login")
@@ -233,3 +234,15 @@ async def reset_password(
         raise HTTPException(400, detail="Reset link already used") from err
 
     return {"message": "Password has been reset"}
+
+
+@auth_router.get("/deprecated-endpoint")
+@deprecated(sunset="Sat, 01 Jan 2027 00:00:00 GMT")
+async def deprecated_endpoint():
+    """
+    Handles legacy authentication.
+
+    **SUNSET DATE:** Sat, 01 Jan 2027 00:00:00 GMT - Please migrate
+    to /api/v1/auth/refresh.
+    """
+    ...

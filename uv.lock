@@ -822,6 +822,20 @@ httpx = [
 ]
 
 [[package]]
+name = "fastapi-pagination"
+version = "0.15.16"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/42/65/9c2f1c324fa7a83b328b024c45e70471007b165a1d56ab237fe0e574e36f/fastapi_pagination-0.15.16.tar.gz", hash = "sha256:739a4e904729dc01e03ce95e260ed9be050d48a3659be8463e5c4fcdd0cf25b0", size = 614997, upload-time = "2026-07-28T18:41:07.421Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/d1/9725ec62421dcfe430d874cba9f82c0288baee0c4b7dd8aa8dcca2b0394e/fastapi_pagination-0.15.16-py3-none-any.whl", hash = "sha256:86dc73620812d47c297a7b8baca4eba2bac5d3f1d73aa75dc6e3bb12c0b803f7", size = 65991, upload-time = "2026-07-28T18:41:06.076Z" },
+]
+
+[[package]]
 name = "fasti-kit"
 version = "0.1.0"
 source = { editable = "." }
@@ -833,6 +847,7 @@ dependencies = [
     { name = "bcrypt" },
     { name = "fastapi" },
     { name = "fastapi-mail", extra = ["httpx"] },
+    { name = "fastapi-pagination" },
     { name = "httptools" },
     { name = "psycopg2-binary" },
     { name = "pydantic", extra = ["email"] },
@@ -878,6 +893,7 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=5.0.0" },
     { name = "fastapi", specifier = ">=0.138.2" },
     { name = "fastapi-mail", extras = ["httpx"], specifier = ">=1.6.5" },
+    { name = "fastapi-pagination", specifier = ">=0.15.16" },
     { name = "httptools", specifier = ">=0.8.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.13.4" },

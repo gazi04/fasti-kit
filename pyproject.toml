@@ -25,6 +25,7 @@ dependencies = [
     "redis>=8.1.0",
     "aiohttp>=3.14.3",
     "fastapi-pagination>=0.15.16",
+    "sqlakeyset>=2.0.1775222100",
 ]
 
 [build-system]

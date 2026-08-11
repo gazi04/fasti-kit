@@ -40,6 +40,7 @@ create-service = "scripts.create_service:main"
 create-schema = "scripts.create_schema:main"
 create-route = "scripts.create_route:main"
 create-all = "scripts.create_all:main"
+seed = "scripts.seed:main"
 
 [dependency-groups]
 dev = [
@@ -87,7 +88,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**"    = ["S101", "S105", "S106"]   # asserts + hardcoded test passwords
-"scripts/**"  = ["E501"]                   # scaffolding templates are long strings
+"scripts/**"  = ["E501", "S107"]                   # scaffolding templates are long strings
 "alembic/**"  = ["E501", "F401"]
 
 [tool.ruff.lint.isort]

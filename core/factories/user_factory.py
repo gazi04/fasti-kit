@@ -1,4 +1,4 @@
-from tests.factories.base import BasePydanticFactory, BaseSQLAlchemyFactory
+from core.factories.base import BasePydanticFactory, BaseSQLAlchemyFactory
 from user.models import UserModel
 from user.schemas import CreateUserRequest
 

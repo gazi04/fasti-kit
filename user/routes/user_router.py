@@ -9,6 +9,7 @@ from fastapi import (
     Request,
     Response,
 )
+from fastapi_pagination.cursor import CursorPage, CursorParams
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import auth
@@ -114,3 +115,11 @@ async def delete_user(
     await TokenService.revoke_tokens(request, payload, db)
     auth.unset_refresh_cookies(response)
     return {"message": "User deleted"}
+
+
+@user_router.get("/list", response_model=CursorPage[UserResponse])
+async def list_users(
+    params: CursorParams = Depends(),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> CursorPage[User]:
+    return await user_repo.list(params)

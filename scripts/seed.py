@@ -7,6 +7,7 @@ from sqlalchemy import delete
 from auth.services.security_service import SecurityService
 from core.database import AsyncSessionLocal
 from core.factories.user_factory import CreateUserFactory
+from core.safety import SafetyError, ensure_safe_operation
 from user.models.user_model import UserModel
 from user.repositories.user_repository import UserRepository
 
@@ -65,7 +66,19 @@ def seed(
     force: Annotated[
         bool, typer.Option("--force", help="Seed even if tables are non-emtpy")
     ] = False,
+    allow_production: Annotated[
+        bool,
+        typer.Option(
+            "--allow-production", help="Allow seeding in the production environment"
+        ),
+    ] = False,
 ) -> None:
+    try:
+        ensure_safe_operation("seed", allow_production=allow_production)
+    except SafetyError as err:
+        typer.echo(f"ERROR: {err}", err=True)
+        raise typer.Exit(1) from err
+
     asyncio.run(
         seed_database(
             count, admin_email, admin_password, unverified_count, reset, force

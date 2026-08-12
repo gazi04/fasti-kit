@@ -28,5 +28,8 @@ migrate message="":
   uv run alembic revision --autogenerate -m "{{message}}"
   uv run alembic upgrade head
 
+seed:
+  uv run seed --reset
+
 docker:
   docker-compose up -d

@@ -10,6 +10,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from auth.dependencies import auth
 from auth.errors import install_auth_error_handlers
 from core.api_versions import v1_router
+from core.health import health_router
 from core.limiter import limiter
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import CorrelationIdMiddleware
@@ -66,6 +67,7 @@ app.add_middleware(
 
 add_pagination(app)
 
+app.include_router(health_router)
 app.include_router(v1_router)
 
 Instrumentator().instrument(app).expose(app)

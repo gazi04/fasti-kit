@@ -6,16 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi_pagination import add_pagination
 from prometheus_fastapi_instrumentator import Instrumentator
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 
 from auth.dependencies import auth
+from auth.errors import install_auth_error_handlers
 from core.api_versions import v1_router
-from core.exception import DomainException, domain_exception_handler
 from core.limiter import limiter
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import CorrelationIdMiddleware
 from core.middlewares.n1_detector import N1DetectorMiddleware
+from core.problem import install_problem_handlers
 from core.setting import get_settings
 from core.startup_checks import (
     StartupCheckError,
@@ -46,8 +45,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Title", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
-app.add_exception_handler(DomainException, domain_exception_handler)  # type: ignore[arg-type]
+install_problem_handlers(app)
+install_auth_error_handlers(app)
 
 auth.handle_errors(app)
 

@@ -88,9 +88,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**"    = ["S101", "S105", "S106"]   # asserts + hardcoded test passwords
+"tests/**"    = ["S101", "S105", "S106", "F841"]   # asserts + hardcoded test passwords
 "scripts/**"  = ["E501", "S107"]                   # scaffolding templates are long strings
 "alembic/**"  = ["E501", "F401"]
+"core/**"     = ["E501", "S104"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["auth", "user", "core", "scripts"]

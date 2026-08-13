@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     db_user: str | None = None
     db_password: str | None = None
     db_name: str | None = None
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout: int = 30
+    db_pool_recycle: int = 3600
+    db_echo: bool = False
     database_url: str
 
     allowed_origins: list[str]

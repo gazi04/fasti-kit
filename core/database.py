@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import QueuePool
 
 from core.setting import get_settings
 
@@ -37,7 +38,7 @@ def receive_checkou(dbapi_connection, connection_record, connection_proxy):
     connection_record.info["checkout_start_time"] = time.time()
 
     pool = sync_engine.pool
-    if pool.checkedout() >= settings.db_pool_size:
+    if isinstance(pool, QueuePool) and pool.checkedout() >= settings.db_pool_size:
         logger.warning(
             f"Database pool is heavily utilized. Checked out: {pool.checkedout()}, "
             f"Size: {pool.size()}, Overflow: {pool.overflow()}"

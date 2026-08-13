@@ -15,6 +15,7 @@ from core.limiter import limiter
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import CorrelationIdMiddleware
 from core.middlewares.n1_detector import N1DetectorMiddleware
+from core.openapi import setup_openapi
 from core.problem import install_problem_handlers
 from core.setting import get_settings
 from core.startup_checks import (
@@ -65,6 +66,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+setup_openapi(app)
 add_pagination(app)
 
 app.include_router(health_router)

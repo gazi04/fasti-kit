@@ -32,13 +32,14 @@ from auth.services.token_service import TokenService
 from core.database import get_db
 from core.deprecation import DeprecationRoute, deprecated
 from core.limiter import limiter
+from core.openapi import problem_responses
 from user.dependencies import get_user_repository
 from user.repositories.user_repository import UserRepository
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"], route_class=DeprecationRoute)
 
 
-@auth_router.post("/login")
+@auth_router.post("/login", responses=problem_responses(401, 422, 500))
 @limiter.limit("5/minute")
 async def login(
     data: LoginRequest,

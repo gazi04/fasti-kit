@@ -1,24 +1,55 @@
-# src/core/middlewares/correlation.py
 import contextvars
+import logging
 import uuid
 
-from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.datastructures import Headers, MutableHeaders
+from starlette.requests import Request
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from core.problem import problem_response
+
+logger = logging.getLogger(__name__)
 
 request_id_context = contextvars.ContextVar("request_id", default="-")
 
 
-class CorrelationIdMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Extract or generate the ID
-        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+class CorrelationIdMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-        # Set the context variable for the current async task execution
-        token = request_id_context.set(request_id)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
+        try:
+            # 1. Extract or generate Correlation ID from raw headers
+            headers = Headers(scope=scope)
+            request_id = headers.get("X-Request-ID") or str(uuid.uuid4())
+            token = request_id_context.set(request_id)
 
-        # Reset the context variable
-        request_id_context.reset(token)
-        return response
+            # 2. Intercept response start event to inject X-Request-ID header
+            async def send_with_correlation_header(message: dict) -> None:
+                if message["type"] == "http.response.start":
+                    mutable_headers = MutableHeaders(scope=message)
+                    mutable_headers["X-Request-ID"] = request_id
+                await send(message)
+
+            try:
+                # 3. Pass request down the ASGI stack
+                await self.app(scope, receive, send_with_correlation_header)
+            finally:
+                # Always reset context variable, even if downstream route fails
+                request_id_context.reset(token)
+
+        except Exception:
+            # 4. Catch any middleware-level crash and return RFC 9457 Problem Details
+            logger.exception("Unhandled exception in CorrelationIdMiddleware")
+            request = Request(scope)
+            response = problem_response(
+                request,
+                500,
+                detail="An internal server error occurred.",
+                title="Internal Server Error",
+            )
+            await response(scope, receive, send)

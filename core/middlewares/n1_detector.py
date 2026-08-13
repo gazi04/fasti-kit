@@ -1,13 +1,13 @@
 import contextvars
 import logging
-from collections.abc import Callable
 
-from fastapi import Request, Response
 from sqlalchemy import event
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from starlette.datastructures import MutableHeaders
+from starlette.requests import Request
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from core.database import engine
+from core.problem import problem_response
 
 logger = logging.getLogger(__name__)
 
@@ -25,31 +25,55 @@ def _increment_query_count(*args, **kwargs) -> None:
 event.listen(engine.sync_engine, "before_cursor_execute", _increment_query_count)
 
 
-class N1DetectorMiddleware(BaseHTTPMiddleware):
+class N1DetectorMiddleware:
     def __init__(self, app: ASGIApp, threshold: int = DEFAULT_THRESHOLD) -> None:
-        super().__init__(app)
+        self.app = app
         self.threshold = threshold
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        token = _query_count.set(0)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        # Pass non-HTTP protocols (e.g. WebSockets) straight through
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
         try:
-            response = await call_next(request)
+            # 1. Reset query counter for the current request
+            token = _query_count.set(0)
 
-            count = _query_count.get()
-            response.headers["X-Query-Count"] = str(count)
+            # 2. Intercept response start event to inject X-Query-Count header & inspect count
+            async def send_with_query_count_header(message: dict) -> None:
+                if message["type"] == "http.response.start":
+                    count = _query_count.get()
+                    mutable_headers = MutableHeaders(scope=message)
+                    mutable_headers["X-Query-Count"] = str(count)
 
-            if count > self.threshold:
-                logger.warning(
-                    "N+1 query alert",
-                    extra={
-                        "method": request.method,
-                        "path": request.url.path,
-                        "query_count": count,
-                        "threshold": self.threshold,
-                    },
-                )
+                    if count > self.threshold:
+                        logger.warning(
+                            "N+1 query alert",
+                            extra={
+                                "method": scope.get("method", ""),
+                                "path": scope.get("path", ""),
+                                "query_count": count,
+                                "threshold": self.threshold,
+                            },
+                        )
+                await send(message)
 
-            return response
-        finally:
-            _query_count.reset(token)
+            try:
+                # 3. Pass request down the ASGI stack
+                await self.app(scope, receive, send_with_query_count_header)
+            finally:
+                # Always reset context variable, even if the request fails
+                _query_count.reset(token)
+
+        except Exception:
+            # 4. Catch any middleware-level crash and return RFC 9457 Problem Details
+            logger.exception("Unhandled exception in N1DetectorMiddleware")
+            request = Request(scope)
+            response = problem_response(
+                request,
+                500,
+                detail="An internal server error occurred.",
+                title="Internal Server Error",
+            )
+            await response(scope, receive, send)

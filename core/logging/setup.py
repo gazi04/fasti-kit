@@ -20,7 +20,6 @@ def setup_logging():
     logging.config.dictConfig(
         {
             "version": 1,
-            # CRITICAL: Set to False so Uvicorn's loggers are untouched
             "disable_existing_loggers": False,
             "filters": {
                 "request_id_filter": {
@@ -52,10 +51,26 @@ def setup_logging():
                 },
             },
             "loggers": {
-                # Route our root application logs to both file and console
+                # Root application logger
                 "": {
                     "handlers": ["console", "file"],
                     "level": "INFO",
+                },
+                # Route Uvicorn core & ASGI error logs to app.log as well
+                "uvicorn": {
+                    "handlers": ["console", "file"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+                "uvicorn.error": {
+                    "handlers": ["console", "file"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+                "uvicorn.access": {
+                    "handlers": ["console", "file"],
+                    "level": "INFO",
+                    "propagate": False,
                 },
             },
         }

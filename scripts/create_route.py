@@ -17,13 +17,17 @@ console = Console()
 def create_route(
     domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
     name: str = typer.Option(None, "--name", "-n", help="Entity/Route name"),
-    fields: str = typer.Option(None, "--fields", "-f", help="Ignored for routes, kept for CLI consistency"),
+    fields: str = typer.Option(
+        None, "--fields", "-f", help="Ignored for routes, kept for CLI consistency"
+    ),
 ) -> None:
     """Scaffold a new route interactively or via CLI flags."""
 
     # 1. Interactive Prompts
     if not domain:
-        domain = Prompt.ask("[bold blue]Enter domain name[/bold blue] (e.g., inventory)")
+        domain = Prompt.ask(
+            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
+        )
     if not name:
         name = Prompt.ask("[bold blue]Enter route name[/bold blue] (e.g., product)")
 
@@ -31,7 +35,9 @@ def create_route(
     snake = to_snake_case(name)
     pascal = to_pascal_case(name)
     route_var = f"{snake}_router"
-    prefix = snake.replace("_", "-")  # Standard REST practice (e.g. order-item instead of order_item)
+    prefix = snake.replace(
+        "_", "-"
+    )  # Standard REST practice (e.g. order-item instead of order_item)
 
     # 3. Generate Content
     layer_dir = Path(domain) / "routes"
@@ -112,7 +118,9 @@ async def delete_{snake}(
     write_new_file(file_path, template)
     update_init(layer_dir / "__init__.py", route_var, [route_var])
 
-    console.print(f"[bold green]✨ Created route {route_var} at {file_path}[/bold green]")
+    console.print(
+        f"[bold green]✨ Created route {route_var} at {file_path}[/bold green]"
+    )
     console.print(
         f"\n[yellow]Reminder:[/yellow] mount the new router in [bold]core/api_versions.py[/bold]:\n"
         f"    [cyan]from {domain}.routes import {route_var}[/cyan]\n"

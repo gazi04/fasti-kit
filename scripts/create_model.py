@@ -19,20 +19,24 @@ console = Console()
 def create_model(
     domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
     name: str = typer.Option(None, "--name", "-n", help="Entity/Model name"),
-    fields: str = typer.Option(None, "--fields", "-f", help="Fields: name:str,price:float"),
+    fields: str = typer.Option(
+        None, "--fields", "-f", help="Fields: name:str,price:float"
+    ),
 ) -> None:
     """Scaffold a new ORM model interactively or via CLI flags."""
-    
+
     # 1. Interactive Prompts
     if not domain:
-        domain = Prompt.ask("[bold blue]Enter domain name[/bold blue] (e.g., inventory)")
+        domain = Prompt.ask(
+            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
+        )
     if not name:
         name = Prompt.ask("[bold blue]Enter model name[/bold blue] (e.g., product)")
     if fields is None:
         console.print("[dim]Supported types: str, int, float, bool, uuid[/dim]")
         fields = Prompt.ask(
-            "[bold blue]Enter fields[/bold blue] (e.g., title:str,price:float) or leave blank", 
-            default=""
+            "[bold blue]Enter fields[/bold blue] (e.g., title:str,price:float) or leave blank",
+            default="",
         )
 
     # 2. Setup Variables
@@ -45,7 +49,7 @@ def create_model(
     model_fields = "\n    ".join(
         [
             f"{f['name']}: Mapped[{f['py_type']}] = mapped_column({f['sqla_type']}"
-            f"{', default=' + f['default'] if f['default'] else ''})" 
+            f"{', default=' + f['default'] if f['default'] else ''})"
             for f in parsed_fields
         ]
     )
@@ -89,7 +93,9 @@ class {pascal}Model(Base):
     write_new_file(file_path, template)
     update_init(layer_dir / "__init__.py", f"{snake}_model", [f"{pascal}Model"])
 
-    console.print(f"[bold green]✨ Created model {pascal}Model at {file_path}[/bold green]")
+    console.print(
+        f"[bold green]✨ Created model {pascal}Model at {file_path}[/bold green]"
+    )
     console.print(
         f"\n[yellow]Reminder:[/yellow] register the new model for Alembic/metadata discovery - "
         f"add this line to [bold]core/models.py[/bold]:\n"

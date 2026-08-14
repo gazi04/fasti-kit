@@ -18,15 +18,21 @@ console = Console()
 def create_repository(
     domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
     name: str = typer.Option(None, "--name", "-n", help="Entity/Repository name"),
-    fields: str = typer.Option(None, "--fields", "-f", help="Fields: name:str,price:float"),
+    fields: str = typer.Option(
+        None, "--fields", "-f", help="Fields: name:str,price:float"
+    ),
 ) -> None:
     """Scaffold a new repository interactively or via CLI flags."""
 
     # 1. Interactive Prompts
     if not domain:
-        domain = Prompt.ask("[bold blue]Enter domain name[/bold blue] (e.g., inventory)")
+        domain = Prompt.ask(
+            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
+        )
     if not name:
-        name = Prompt.ask("[bold blue]Enter repository name[/bold blue] (e.g., product)")
+        name = Prompt.ask(
+            "[bold blue]Enter repository name[/bold blue] (e.g., product)"
+        )
     if fields is None:
         console.print("[dim]Supported types: str, int, float, bool, uuid[/dim]")
         fields = Prompt.ask(
@@ -45,7 +51,12 @@ def create_repository(
         add_signature = f"self, {add_params}"
         model_kwargs = ", ".join([f"{f['name']}={f['name']}" for f in parsed_fields])
         model_instantiation = f"{pascal}Model({model_kwargs})"
-        to_entity_fields = "\n            ".join([f"{f['name']}=model.{f['name']}," for f in parsed_fields]) + "\n            "
+        to_entity_fields = (
+            "\n            ".join(
+                [f"{f['name']}=model.{f['name']}," for f in parsed_fields]
+            )
+            + "\n            "
+        )
     else:
         add_signature = "self, **fields"
         model_instantiation = f"{pascal}Model(**fields)"
@@ -145,7 +156,9 @@ class {pascal}Repository:
         layer_dir / "__init__.py", f"{snake}_repository", [f"{pascal}Repository"]
     )
 
-    console.print(f"[bold green]✨ Created repository {pascal}Repository at {file_path}[/bold green]")
+    console.print(
+        f"[bold green]✨ Created repository {pascal}Repository at {file_path}[/bold green]"
+    )
 
 
 def main() -> None:

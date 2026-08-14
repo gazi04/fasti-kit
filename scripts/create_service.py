@@ -17,13 +17,17 @@ console = Console()
 def create_service(
     domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
     name: str = typer.Option(None, "--name", "-n", help="Entity/Service name"),
-    fields: str = typer.Option(None, "--fields", "-f", help="Ignored for services, kept for CLI consistency"),
+    fields: str = typer.Option(
+        None, "--fields", "-f", help="Ignored for services, kept for CLI consistency"
+    ),
 ) -> None:
     """Scaffold a new service interactively or via CLI flags."""
 
     # 1. Interactive Prompts
     if not domain:
-        domain = Prompt.ask("[bold blue]Enter domain name[/bold blue] (e.g., inventory)")
+        domain = Prompt.ask(
+            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
+        )
     if not name:
         name = Prompt.ask("[bold blue]Enter service name[/bold blue] (e.g., product)")
 
@@ -67,7 +71,9 @@ class {pascal}Service:
     write_new_file(file_path, template)
     update_init(layer_dir / "__init__.py", f"{snake}_service", [f"{pascal}Service"])
 
-    console.print(f"[bold green]✨ Created service {pascal}Service at {file_path}[/bold green]")
+    console.print(
+        f"[bold green]✨ Created service {pascal}Service at {file_path}[/bold green]"
+    )
 
 
 def main() -> None:

@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import typer
+from rich.console import Console
+from rich.prompt import Prompt
 
 from scripts._boilerplate import (
     to_pascal_case,
@@ -9,50 +11,76 @@ from scripts._boilerplate import (
     write_new_file,
 )
 
-TEMPLATE = """from typing import Optional
+console = Console()
+
+
+def create_route(
+    domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
+    name: str = typer.Option(None, "--name", "-n", help="Entity/Route name"),
+    fields: str = typer.Option(None, "--fields", "-f", help="Ignored for routes, kept for CLI consistency"),
+) -> None:
+    """Scaffold a new route interactively or via CLI flags."""
+
+    # 1. Interactive Prompts
+    if not domain:
+        domain = Prompt.ask("[bold blue]Enter domain name[/bold blue] (e.g., inventory)")
+    if not name:
+        name = Prompt.ask("[bold blue]Enter route name[/bold blue] (e.g., product)")
+
+    # 2. Setup Variables
+    snake = to_snake_case(name)
+    pascal = to_pascal_case(name)
+    route_var = f"{snake}_router"
+    prefix = snake.replace("_", "-")  # Standard REST practice (e.g. order-item instead of order_item)
+
+    # 3. Generate Content
+    layer_dir = Path(domain) / "routes"
+    file_path = layer_dir / f"{route_var}.py"
+
+    template = f"""from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from {domain}.entities.{snake} import {class_name}
-from {domain}.repositories.{snake}_repository import {class_name}Repository
-from {domain}.schemas.{snake}_schema import Create{class_name}Request, Update{class_name}Request, {class_name}Response
-from {domain}.services.{snake}_service import {class_name}Service
+from {domain}.entities.{snake} import {pascal}
+from {domain}.repositories.{snake}_repository import {pascal}Repository
+from {domain}.schemas.{snake}_schema import Create{pascal}Request, Update{pascal}Request, {pascal}Response
+from {domain}.services.{snake}_service import {pascal}Service
 
 # Uncomment to require an authenticated caller (see auth/dependencies.py):
 # from authx import TokenPayload
 # from auth.dependencies import auth
 
-{route_var} = APIRouter(prefix="/{prefix}", tags=["{tag}"])
+{route_var} = APIRouter(prefix="/{prefix}", tags=["{pascal}"])
 
 
-@{route_var}.post("/create", response_model={class_name}Response)
-async def create_{snake}(data: Create{class_name}Request, db: AsyncSession = Depends(get_db)) -> {class_name}:
-    service = {class_name}Service({class_name}Repository(db))
+@{route_var}.post("/create", response_model={pascal}Response)
+async def create_{snake}(data: Create{pascal}Request, db: AsyncSession = Depends(get_db)) -> {pascal}:
+    service = {pascal}Service({pascal}Repository(db))
     return await service.create(data)
 
 
-@{route_var}.get("/get/{{id}}", response_model={class_name}Response)
-async def get_{snake}(id: UUID, db: AsyncSession = Depends(get_db)) -> Optional[{class_name}]:
-    service = {class_name}Service({class_name}Repository(db))
+@{route_var}.get("/get/{{id}}", response_model={pascal}Response)
+async def get_{snake}(id: UUID, db: AsyncSession = Depends(get_db)) -> Optional[{pascal}]:
+    service = {pascal}Service({pascal}Repository(db))
     record = await service.get(id)
 
     if record is None:
-        raise HTTPException(404, "{class_name} not found")
+        raise HTTPException(404, "{pascal} not found")
 
     return record
 
 
-@{route_var}.patch("/update/{{id}}", response_model={class_name}Response)
+@{route_var}.patch("/update/{{id}}", response_model={pascal}Response)
 async def update_{snake}(
     id: UUID,
-    data: Update{class_name}Request,
+    data: Update{pascal}Request,
     db: AsyncSession = Depends(get_db),
     # payload: TokenPayload = Depends(auth.token_required(type='access', locations=['headers'])),
-) -> Optional[{class_name}]:
-    service = {class_name}Service({class_name}Repository(db))
+) -> Optional[{pascal}]:
+    service = {pascal}Service({pascal}Repository(db))
 
     try:
         record = await service.update(id, data)
@@ -60,7 +88,7 @@ async def update_{snake}(
         raise HTTPException(409, str(exc))
 
     if record is None:
-        raise HTTPException(404, "{class_name} not found")
+        raise HTTPException(404, "{pascal} not found")
 
     return record
 
@@ -71,42 +99,24 @@ async def delete_{snake}(
     db: AsyncSession = Depends(get_db),
     # payload: TokenPayload = Depends(auth.token_required(type='access', locations=['headers'])),
 ):
-    service = {class_name}Service({class_name}Repository(db))
+    service = {pascal}Service({pascal}Repository(db))
     deleted = await service.delete(id)
 
     if deleted is None:
-        raise HTTPException(404, "{class_name} not found")
+        raise HTTPException(404, "{pascal} not found")
 
-    return {{"message": "{class_name} deleted"}}
+    return {{"message": "{pascal} deleted"}}
 """
 
-
-def create_route(domain: str, name: str) -> None:
-    """Scaffold a new route."""
-    snake = to_snake_case(name)
-    pascal = to_pascal_case(name)
-    route_var = f"{snake}_router"
-
-    layer_dir = Path(domain) / "routes"
-    file_path = layer_dir / f"{route_var}.py"
-
-    write_new_file(
-        file_path,
-        TEMPLATE.format(
-            domain=domain,
-            snake=snake,
-            class_name=pascal,
-            route_var=route_var,
-            prefix=snake,
-            tag=pascal,
-        ),
-    )
+    # 4. Write File & Update __init__.py
+    write_new_file(file_path, template)
     update_init(layer_dir / "__init__.py", route_var, [route_var])
 
-    print(
-        f"reminder: mount the new router in main.py:\n"
-        f"    from {domain}.routes import {route_var}\n"
-        f"    app.include_router({route_var}, prefix='/api')"
+    console.print(f"[bold green]✨ Created route {route_var} at {file_path}[/bold green]")
+    console.print(
+        f"\n[yellow]Reminder:[/yellow] mount the new router in [bold]core/api_versions.py[/bold]:\n"
+        f"    [cyan]from {domain}.routes import {route_var}[/cyan]\n"
+        f"    [cyan]v1_router.include_router({route_var})[/cyan]"
     )
 
 

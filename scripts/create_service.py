@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import typer
+from rich.console import Console
+from rich.prompt import Prompt
 
 from scripts._boilerplate import (
     to_pascal_case,
@@ -9,47 +11,63 @@ from scripts._boilerplate import (
     write_new_file,
 )
 
-TEMPLATE = """from typing import Optional
+console = Console()
+
+
+def create_service(
+    domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
+    name: str = typer.Option(None, "--name", "-n", help="Entity/Service name"),
+    fields: str = typer.Option(None, "--fields", "-f", help="Ignored for services, kept for CLI consistency"),
+) -> None:
+    """Scaffold a new service interactively or via CLI flags."""
+
+    # 1. Interactive Prompts
+    if not domain:
+        domain = Prompt.ask("[bold blue]Enter domain name[/bold blue] (e.g., inventory)")
+    if not name:
+        name = Prompt.ask("[bold blue]Enter service name[/bold blue] (e.g., product)")
+
+    # 2. Setup Variables
+    snake = to_snake_case(name)
+    pascal = to_pascal_case(name)
+
+    # 3. Generate Content
+    layer_dir = Path(domain) / "services"
+    file_path = layer_dir / f"{snake}_service.py"
+
+    template = f"""from typing import Optional
 from uuid import UUID
 
-from {domain}.entities.{snake} import {class_name}
-from {domain}.repositories.{snake}_repository import {class_name}Repository
-from {domain}.schemas.{snake}_schema import Create{class_name}Request, Update{class_name}Request
+from {domain}.entities.{snake} import {pascal}
+from {domain}.repositories.{snake}_repository import {pascal}Repository
+from {domain}.schemas.{snake}_schema import Create{pascal}Request, Update{pascal}Request
 
 
-class {class_name}Service:
-    def __init__(self, repo: {class_name}Repository) -> None:
+class {pascal}Service:
+    def __init__(self, repo: {pascal}Repository) -> None:
         self.repo = repo
 
-    async def create(self, data: Create{class_name}Request) -> {class_name}:
+    async def create(self, data: Create{pascal}Request) -> {pascal}:
         return await self.repo.add(**data.model_dump())
 
-    async def get(self, id: UUID) -> Optional[{class_name}]:
+    async def get(self, id: UUID) -> Optional[{pascal}]:
         return await self.repo.get(id)
 
-    async def update(self, id: UUID, data: Update{class_name}Request) -> Optional[{class_name}]:
+    async def update(self, id: UUID, data: Update{pascal}Request) -> Optional[{pascal}]:
         return await self.repo.update(id=id, **data.model_dump(exclude_unset=True))
 
-    async def delete(self, id: UUID, force: bool = False) -> Optional[{class_name}]:
+    async def delete(self, id: UUID, force: bool = False) -> Optional[{pascal}]:
         if force:
             return await self.repo.force_delete(id)
 
         return await self.repo.delete(id)
 """
 
-
-def create_service(domain: str, name: str) -> None:
-    """Scaffold a new service."""
-    snake = to_snake_case(name)
-    pascal = to_pascal_case(name)
-
-    layer_dir = Path(domain) / "services"
-    file_path = layer_dir / f"{snake}_service.py"
-
-    write_new_file(
-        file_path, TEMPLATE.format(class_name=pascal, domain=domain, snake=snake)
-    )
+    # 4. Write File & Update __init__.py
+    write_new_file(file_path, template)
     update_init(layer_dir / "__init__.py", f"{snake}_service", [f"{pascal}Service"])
+
+    console.print(f"[bold green]✨ Created service {pascal}Service at {file_path}[/bold green]")
 
 
 def main() -> None:

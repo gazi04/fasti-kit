@@ -1,7 +1,5 @@
-import os
-import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -26,7 +24,7 @@ TYPE_MAPPING = {
 }
 
 
-def parse_fields(fields_str: str) -> List[Dict[str, Any]]:
+def parse_fields(fields_str: str) -> list[dict[str, Any]]:
     """Parses 'name:str,price:float,is_active:bool=True' into structured data."""
     parsed = []
     if not fields_str:

@@ -8,15 +8,15 @@ dev:
 worker:
   uv run watchfiles "saq core.worker.main.settings" core/ user/ auth/
 
-lint:
-  uv run ruff check .
-  uv run pyright
+lint path=".":
+  uv run ruff check {{path}}
+  uv run pyright {{path}}
 
-lint-fix:
-  uv run ruff check --fix .
+lint-fix path=".":
+  uv run ruff check --fix {{path}}
 
-format:
-  uv run ruff format .
+format path=".":
+  uv run ruff format {{path}}
 
 test:
   uv run python -m pytest --cov

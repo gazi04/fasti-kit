@@ -121,5 +121,8 @@ async def delete_user(
 async def list_users(
     params: CursorParams = Depends(),
     user_repo: UserRepository = Depends(get_user_repository),
+    payload: TokenPayload = Depends(
+        auth.token_required(type="access", locations=["headers"])
+    ),
 ) -> CursorPage[User]:
     return await user_repo.list(params)

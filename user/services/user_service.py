@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from auth.services.security_service import SecurityService
+from core.cache import cache, invalidate_tags
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import (
@@ -17,6 +18,7 @@ class UserService:
         password_hash = SecurityService.hash_password(data.password)
         return await self.repo.add(data.name, data.email, password_hash)
 
+    @cache(ttl=3600, tags=["users"])
     async def get(self, user_id: UUID) -> User | None:
         return await self.repo.get(user_id)
 
@@ -24,7 +26,14 @@ class UserService:
         data.password = (
             SecurityService.hash_password(data.password) if data.password else None
         )
-        return await self.repo.update(id=user_id, **data.model_dump(exclude_unset=True))
+        result = await self.repo.update(
+            id=user_id, **data.model_dump(exclude_unset=True)
+        )
+
+        if result:
+            await invalidate_tags("users")
+
+        return result
 
     async def delete(self, user_id: UUID, force: bool = False) -> User | None:
         if force:

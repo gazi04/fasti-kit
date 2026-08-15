@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    cache_prefix: str = "fasti-cache"
+    cache_default_ttl: int = 3600
     @computed_field
     @property
     def redis_url(self) -> str:

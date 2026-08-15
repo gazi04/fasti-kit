@@ -4,7 +4,7 @@ import uuid
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.requests import Request
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from core.problem import problem_response
 
@@ -29,7 +29,7 @@ class CorrelationIdMiddleware:
             token = request_id_context.set(request_id)
 
             # 2. Intercept response start event to inject X-Request-ID header
-            async def send_with_correlation_header(message: dict) -> None:
+            async def send_with_correlation_header(message: Message) -> None:
                 if message["type"] == "http.response.start":
                     mutable_headers = MutableHeaders(scope=message)
                     mutable_headers["X-Request-ID"] = request_id

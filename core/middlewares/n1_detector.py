@@ -4,7 +4,7 @@ import logging
 from sqlalchemy import event
 from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from core.database import engine
 from core.problem import problem_response
@@ -41,7 +41,7 @@ class N1DetectorMiddleware:
             token = _query_count.set(0)
 
             # 2. Intercept response start event to inject X-Query-Count header & inspect count
-            async def send_with_query_count_header(message: dict) -> None:
+            async def send_with_query_count_header(message: Message) -> None:
                 if message["type"] == "http.response.start":
                     count = _query_count.get()
                     mutable_headers = MutableHeaders(scope=message)

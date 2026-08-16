@@ -11,7 +11,6 @@ from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.exception import DomainException
-from core.middlewares.correlation import request_id_context
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +80,8 @@ def problem_response(
     invalid_params: list[InvalidParam] | None = None,
     extensions: dict[str, Any] | None = None,
 ) -> JSONResponse:
+    from core.middlewares.correlation import request_id_context
+
     correlation_id = request_id_context.get() or request.headers.get(
         "X-Request-ID", "-"
     )

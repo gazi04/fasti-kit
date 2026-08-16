@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, Response, status
 from sqlalchemy import text
 
-from core.database import engine
+from core.database import primary_engine, replica_engine
 from core.queue import redis
 
 logger = logging.getLogger(__name__)
@@ -12,8 +12,13 @@ logger = logging.getLogger(__name__)
 health_router = APIRouter(prefix="/health", tags=["Health"])
 
 
-async def _check_database() -> None:
-    async with engine.connect() as conn:
+async def _check_primary_database() -> None:
+    async with primary_engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+
+
+async def _check_replica_database() -> None:
+    async with replica_engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
 
 
@@ -29,17 +34,24 @@ async def liveness() -> dict[str, str]:
 
 @health_router.get("/ready")
 async def readiness(response: Response) -> dict:
-    """Validates connectivity to PostgreSQL and Redis with short timeouts."""
+    """Validates connectivity to Primary PostgreSQL, Replica PostgreSQL, and Redis."""
     checks = {}
     is_healthy = True
 
     try:
-        await asyncio.wait_for(_check_database(), timeout=2.0)
-        checks["database"] = "ok"
+        await asyncio.wait_for(_check_primary_database(), timeout=2.0)
+        checks["database_primary"] = "ok"
     except Exception as err:
-        logger.error(f"Readiness probe failed for database: {err}")
-        checks["database"] = f"unhealthy: {err}"
+        logger.error(f"Readiness probe failed for primary database: {err}")
+        checks["database_primary"] = f"unhealthy: {err}"
         is_healthy = False
+
+    try:
+        await asyncio.wait_for(_check_replica_database(), timeout=2.0)
+        checks["database_replica"] = "ok"
+    except Exception as err:
+        logger.error(f"Readiness probe failed for replica database: {err}")
+        checks["database_replica"] = f"unhealthy: {err}"
 
     try:
         await asyncio.wait_for(_check_redis(), timeout=2.0)

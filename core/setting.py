@@ -42,6 +42,17 @@ class Settings(BaseSettings):
 
     cache_prefix: str = "fasti-cache"
     cache_default_ttl: int = 3600
+
+    database_replica_url: str | None = None
+
+    @computed_field
+    @property
+    def get_replica_url(self) -> str:
+        if self.database_replica_url:
+            return self.database_replica_url
+        # Default local compose fallback for the replica container
+        return self.database_url.replace("5433", "5434").replace("localhost", "postgres-replica")
+
     @computed_field
     @property
     def redis_url(self) -> str:

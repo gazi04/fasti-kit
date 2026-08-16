@@ -1,6 +1,6 @@
 from sqlalchemy import text
 
-from core.database import engine
+from core.database import primary_engine, replica_engine
 from core.setting import get_settings
 
 settings = get_settings()
@@ -12,12 +12,21 @@ class StartupCheckError(RuntimeError):
 
 async def check_database() -> None:
     try:
-        async with engine.connect() as conn:
+        async with primary_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
     except Exception as err:
         raise StartupCheckError(
-            f"Cannot reach Postgres at {settings.database_url!r}"
-            f"Is it running? Try: docker comp up -d"
+            f"Cannot reach Primary Postgres at {settings.database_url!r}. "
+            f"Is it running? Try: docker compose up -d"
+        ) from err
+
+    try:
+        async with replica_engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as err:
+        raise StartupCheckError(
+            f"Cannot reach Replica Postgres at {settings.get_replica_url!r}. "
+            f"Is it running? Try: docker compose up -d"
         ) from err
 
 

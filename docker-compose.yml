@@ -1,14 +1,40 @@
 services:
-  postgres:
-    image: postgres:17-alpine
+  postgres-primary:
+    image: bitnami/postgresql:latest
+    container_name: fasti-postgres-primary
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: repl_user
+      POSTGRESQL_REPLICATION_PASSWORD: repl_password
+      POSTGRESQL_USERNAME: ${DB_USER}
+      POSTGRESQL_PASSWORD: ${DB_PASSWORD}
+      POSTGRESQL_DATABASE: ${DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_primary_data:/bitnami/postgresql
     ports:
       - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: bitnami/postgresql:latest
+    container_name: fasti-postgres-replica
+    environment:
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_REPLICATION_USER: repl_user
+      POSTGRESQL_REPLICATION_PASSWORD: repl_password
+      POSTGRESQL_MASTER_HOST: postgres-primary
+      POSTGRESQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_replica_data:/bitnami/postgresql
+    ports:
+      - "5434:5432"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -23,10 +49,17 @@ services:
     ports:
       - "8888:80"
     depends_on:
-      postgres:
+      postgres-primary:
+        condition: service_healthy
+      postgres-replica:
         condition: service_healthy
     volumes:
       - pgadmin_data:/var/lib/pgadmin
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/misc/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -97,7 +130,8 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  postgres_primary_data:
+  postgres_replica_data:
   pgadmin_data:
   mailpit_data:
   caddy_data:

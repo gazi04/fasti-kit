@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
+from core.database import force_primary_var
 from user.entities.user import User
 from user.models import UserModel
 
@@ -15,6 +16,7 @@ class UserRepository:
         self.db: AsyncSession = db
 
     async def add(self, full_name: str, email: str, password_hash: str) -> User:
+        force_primary_var.set(True)
         model = UserModel(full_name=full_name, email=email, password_hash=password_hash)
         self.db.add(model)
 
@@ -39,6 +41,7 @@ class UserRepository:
         return self._to_entity(result)
 
     async def update(self, id: UUID, **fields) -> User | None:
+        force_primary_var.set(True)
         user = await self.db.get(UserModel, id)
 
         if user is None:
@@ -55,6 +58,7 @@ class UserRepository:
         return self._to_entity(user)
 
     async def delete(self, id: UUID) -> User | None:
+        force_primary_var.set(True)
         user = await self.db.get(UserModel, id)
 
         if user is None:
@@ -66,6 +70,7 @@ class UserRepository:
         return self._to_entity(user)
 
     async def force_delete(self, id: UUID) -> User | None:
+        force_primary_var.set(True)
         user = await self.db.get(UserModel, id)
 
         if user is None:

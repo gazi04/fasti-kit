@@ -37,6 +37,11 @@ class UserService:
 
     async def delete(self, user_id: UUID, force: bool = False) -> User | None:
         if force:
-            return await self.repo.force_delete(user_id)
+            result = await self.repo.force_delete(user_id)
+        else:
+            result = await self.repo.delete(user_id)
 
-        return await self.repo.delete(user_id)
+        if result:
+            await invalidate_tags("users")
+
+        return result

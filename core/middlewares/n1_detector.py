@@ -6,7 +6,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from core.database import engine
+from core.database import primary_engine, replica_engine
 from core.problem import problem_response
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,12 @@ def _increment_query_count(*args, **kwargs) -> None:
     _query_count.set(_query_count.get() + 1)
 
 
-event.listen(engine.sync_engine, "before_cursor_execute", _increment_query_count)
+event.listen(
+    primary_engine.sync_engine, "before_cursor_execute", _increment_query_count
+)
+event.listen(
+    replica_engine.sync_engine, "before_cursor_execute", _increment_query_count
+)
 
 
 class N1DetectorMiddleware:

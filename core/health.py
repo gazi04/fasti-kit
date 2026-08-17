@@ -52,6 +52,7 @@ async def readiness(response: Response) -> dict:
     except Exception as err:
         logger.error(f"Readiness probe failed for replica database: {err}")
         checks["database_replica"] = f"unhealthy: {err}"
+        is_healthy = False
 
     try:
         await asyncio.wait_for(_check_redis(), timeout=2.0)

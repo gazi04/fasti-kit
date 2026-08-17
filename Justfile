@@ -2,7 +2,7 @@ default:
   @just --list
 
 dev:
-  docker-compose up -d postgres redis mailpit dozzle caddy
+  docker-compose up -d postgres-primary postgres-replica redis mailpit dozzle caddy
   uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 worker:

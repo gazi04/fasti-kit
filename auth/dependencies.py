@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
-from core.database import AsyncSessionLocal, get_db
+from core.database import AsyncSessionLocal, get_db, force_primary_var
 from core.setting import get_settings
 from user.entities import User
 from user.repositories import UserRepository
@@ -42,12 +42,14 @@ async def is_token_revoked(token: str, **kwargs: Any) -> bool:
 async def get_current_user(
     payload=Depends(auth.token_required()), db=Depends(get_db)
 ) -> User | None:
+    force_primary_var.set(True)
     return await UserRepository(db).get(UUID(payload.sub))
 
 
 def get_revoked_token_repository(
     db: AsyncSession = Depends(get_db),
 ) -> RevokedTokenRepository:
+    force_primary_var.set(False)
     return RevokedTokenRepository(db)
 
 

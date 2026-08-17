@@ -50,8 +50,7 @@ class Settings(BaseSettings):
     def get_replica_url(self) -> str:
         if self.database_replica_url:
             return self.database_replica_url
-        # Default local compose fallback for the replica container
-        return self.database_url.replace("5433", "5434").replace("localhost", "postgres-replica")
+        return self.database_url.replace("5433", "5434")
 
     @computed_field
     @property

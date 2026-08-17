@@ -31,7 +31,7 @@ class PasswordResetService:
 
     @staticmethod
     async def send_reset_email(email: str, token: str) -> None:
-        link = f"{settings.backend_url}/api/auth/reset-password?token={token}"
+        link = f"{settings.backend_url}/api/v1/auth/reset-password?token={token}"
         body = f'<p>Click to reset your password: <a href="{link}">{link}</a></p>'
         await task_queue.enqueue(
             "send_email_task",

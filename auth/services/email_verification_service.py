@@ -31,7 +31,7 @@ class EmailVerificationService:
 
     @staticmethod
     async def send_verification_email(email: str, token: str) -> None:
-        link = f"{settings.backend_url}/api/auth/verify-email?token={token}"
+        link = f"{settings.backend_url}/api/v1/auth/verify-email?token={token}"
         body = f'<p>Click to verify your account: <a href="{link}">{link}</a></p>'
         await task_queue.enqueue(
             "send_email_task",

@@ -26,6 +26,7 @@ force_primary_var: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "force_primary", default=False
 )
 
+
 def create_engine(url: str):
     return create_async_engine(
         url,
@@ -38,8 +39,10 @@ def create_engine(url: str):
         echo=settings.db_echo,
     )
 
+
 primary_engine = create_engine(settings.database_url)
 replica_engine = create_engine(settings.get_replica_url)
+
 
 # Attach connection leak listeners to both engines
 def attach_pool_listeners(sync_engine):
@@ -59,38 +62,51 @@ def attach_pool_listeners(sync_engine):
         if start_time:
             duration = time.time() - start_time
             if duration > 2.0:
-                logger.warning(f"Connection leak! DB connection held for {duration:.2f} seconds.")
+                logger.warning(
+                    f"Connection leak! DB connection held for {duration:.2f} seconds."
+                )
+
 
 attach_pool_listeners(primary_engine.sync_engine)
 attach_pool_listeners(replica_engine.sync_engine)
 
 
 class AsyncResilientRoutingSession(AsyncSession):
-    def get_bind(self, mapper=None, clause=None, bind=None, _sa_skip_events=None, _sa_skip_for_implicit_returning=False, **kw):
+    def get_bind(
+        self,
+        mapper=None,
+        clause=None,
+        bind=None,
+        _sa_skip_events=None,
+        _sa_skip_for_implicit_returning=False,
+        **kw,
+    ):
         """Intelligently routes queries and enforces 'sticky' primary connections."""
-        
+
         # 1. If we are flushing (writing) or a write previously occurred in this request
         if self._flushing or force_primary_var.get():
             return primary_engine.sync_engine
-            
+
         # 2. Inspect the AST of the SQL clause
         if clause is not None:
             # Sticky pinning: If it's a mutating query, flag the request to only use Primary
             if isinstance(clause, (Insert, Update, Delete)):
                 force_primary_var.set(True)
                 return primary_engine.sync_engine
-                
+
             # If it is a pure read, use the Replica
             if isinstance(clause, Select):
                 return replica_engine.sync_engine
-                
+
             # Raw SQL text inspection fallback
             if hasattr(clause, "text"):
                 query_text = clause.text.lstrip().lower()
-                if query_text.startswith(("insert", "update", "delete", "create", "drop", "alter")):
+                if query_text.startswith(
+                    ("insert", "update", "delete", "create", "drop", "alter")
+                ):
                     force_primary_var.set(True)
                     return primary_engine.sync_engine
-                    
+
         # Default safety net
         return primary_engine.sync_engine
 
@@ -101,9 +117,11 @@ class AsyncResilientRoutingSession(AsyncSession):
         except OperationalError as e:
             # If we were querying the replica and it failed, failover to primary
             if not force_primary_var.get():
-                logger.warning(f"Replica DB connection failed. Falling back to Primary. Error: {e}")
+                logger.warning(
+                    f"Replica DB connection failed. Falling back to Primary. Error: {e}"
+                )
                 force_primary_var.set(True)
-                
+
                 # Rollback the broken replica transaction state and retry the query on primary
                 await self.rollback()
                 return await super().execute(statement, *args, **kwargs)
@@ -111,13 +129,13 @@ class AsyncResilientRoutingSession(AsyncSession):
 
 
 AsyncSessionLocal = async_sessionmaker(
-    class_=AsyncResilientRoutingSession, 
-    autocommit=False, 
-    autoflush=False
+    class_=AsyncResilientRoutingSession, autocommit=False, autoflush=False
 )
+
 
 class Base(AsyncAttrs, DeclarativeBase):
     pass
+
 
 @asynccontextmanager
 async def db_session() -> AsyncGenerator[AsyncSession]:
@@ -132,6 +150,7 @@ async def db_session() -> AsyncGenerator[AsyncSession]:
     finally:
         await db.close()
         force_primary_var.reset(token)
+
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
     async with db_session() as db:

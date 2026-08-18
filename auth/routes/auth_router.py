@@ -11,8 +11,8 @@ from fastapi import (
     Request,
     Response,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import auth, get_revoked_token_repository, require_scopes
 from auth.repositories.revoked_token_repository import RevokedTokenRepository

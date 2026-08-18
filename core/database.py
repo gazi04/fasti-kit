@@ -84,7 +84,7 @@ class AsyncResilientRoutingSession(AsyncSession):
         """Intelligently routes queries and enforces 'sticky' primary connections."""
 
         # 1. If we are flushing (writing) or a write previously occurred in this request
-        if self._flushing or force_primary_var.get():
+        if getattr(self, "_flushing", False) or force_primary_var.get():
             return primary_engine.sync_engine
 
         # 2. Inspect the AST of the SQL clause

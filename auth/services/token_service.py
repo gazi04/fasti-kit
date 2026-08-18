@@ -25,7 +25,7 @@ class TokenService:
                     refresh_token,
                     key=settings.jwt_secret_key,
                     algorithms=[settings.jwt_algorithm],
-                    verify=False,
+                    verify=True,
                 )
                 if refresh_payload.jti is not None:
                     await repo.add(refresh_payload.jti, refresh_payload.expiry_datetime)

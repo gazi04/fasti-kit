@@ -31,9 +31,24 @@ event.listen(
 
 
 class N1DetectorMiddleware:
+    _listeners_attached: bool = False
+
     def __init__(self, app: ASGIApp, threshold: int = DEFAULT_THRESHOLD) -> None:
         self.app = app
         self.threshold = threshold
+
+        if not N1DetectorMiddleware._listeners_attached:
+            event.listen(
+                primary_engine.sync_engine,
+                "before_cursor_execute",
+                _increment_query_count,
+            )
+            event.listen(
+                replica_engine.sync_engine,
+                "before_cursor_execute",
+                _increment_query_count,
+            )
+            N1DetectorMiddleware._listeners_attached = True
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         # Pass non-HTTP protocols (e.g. WebSockets) straight through

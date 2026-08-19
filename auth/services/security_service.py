@@ -2,9 +2,6 @@ from bcrypt import checkpw, gensalt, hashpw
 
 
 class SecurityService:
-    def __init__(self, repo) -> None:
-        self.repo = repo
-
     @staticmethod
     def hash_password(password: str) -> str:
         return hashpw(password.encode(), gensalt()).decode()

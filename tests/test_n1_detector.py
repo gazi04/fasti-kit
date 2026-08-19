@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 async def test_query_count_header_present(client: AsyncClient) -> None:
     """X-Query-Count header must be injected by the middleware on every response."""
-    response = await client.get("/api/users/me")
+    response = await client.get("/api/v1/users/me")
     assert "x-query-count" in response.headers
     count = int(response.headers["x-query-count"])
     assert count >= 0

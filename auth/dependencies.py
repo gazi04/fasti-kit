@@ -1,15 +1,12 @@
 from typing import Any
-from uuid import UUID
 
 from authx import AuthX, AuthXConfig, TokenPayload
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
-from core.database import AsyncSessionLocal, force_primary_var, get_db
+from core.database import AsyncSessionLocal, get_db
 from core.setting import get_settings
-from user.entities import User
-from user.repositories import UserRepository
 
 settings = get_settings()
 
@@ -30,27 +27,18 @@ async def is_token_revoked(token: str, **kwargs: Any) -> bool:
         token,
         key=settings.jwt_secret_key,
         algorithms=[settings.jwt_algorithm],
-        verify=False,
+        verify=True,
     )
     if payload.jti is None:
         return True
 
-    force_primary_var.set(True)
     async with AsyncSessionLocal() as db:
         return await RevokedTokenRepository(db).exists(payload.jti)
-
-
-async def get_current_user(
-    payload=Depends(auth.token_required()), db=Depends(get_db)
-) -> User | None:
-    force_primary_var.set(True)
-    return await UserRepository(db).get(UUID(payload.sub))
 
 
 def get_revoked_token_repository(
     db: AsyncSession = Depends(get_db),
 ) -> RevokedTokenRepository:
-    force_primary_var.set(False)
     return RevokedTokenRepository(db)
 
 

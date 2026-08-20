@@ -48,9 +48,6 @@ class UserRepository:
             return
 
         for key, value in fields.items():
-            if value is None:
-                continue
-
             setattr(user, key, value)
 
         await self._commit_or_raise()
@@ -96,7 +93,9 @@ class UserRepository:
             await self.db.commit()
         except IntegrityError as err:
             await self.db.rollback()
-            raise ValueError("Email taken") from err
+            if "email" in str(err.orig).lower():
+                raise ValueError("Email taken") from err
+            raise
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:

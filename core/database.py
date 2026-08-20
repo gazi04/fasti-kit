@@ -72,6 +72,10 @@ attach_pool_listeners(replica_engine.sync_engine)
 
 
 class AsyncResilientRoutingSession(AsyncSession):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._has_written = False
+
     def get_bind(
         self,
         mapper=None,
@@ -83,27 +87,26 @@ class AsyncResilientRoutingSession(AsyncSession):
     ):
         """Intelligently routes queries and enforces 'sticky' primary connections."""
 
-        # 1. If we are flushing (writing) or a write previously occurred in this request
-        if getattr(self, "_flushing", False) or force_primary_var.get():
+        # 1. If a write previously occurred in this request, pin everything to primary
+        if force_primary_var.get():
             return primary_engine.sync_engine
 
         # 2. Inspect the AST of the SQL clause
         if clause is not None:
-            # Sticky pinning: If it's a mutating query, flag the request to only use Primary
             if isinstance(clause, (Insert, Update, Delete)):
+                self._has_written = True
                 force_primary_var.set(True)
                 return primary_engine.sync_engine
 
-            # If it is a pure read, use the Replica
             if isinstance(clause, Select):
                 return replica_engine.sync_engine
 
-            # Raw SQL text inspection fallback
             if hasattr(clause, "text"):
                 query_text = clause.text.lstrip().lower()
                 if query_text.startswith(
                     ("insert", "update", "delete", "create", "drop", "alter")
                 ):
+                    self._has_written = True
                     force_primary_var.set(True)
                     return primary_engine.sync_engine
 
@@ -115,14 +118,12 @@ class AsyncResilientRoutingSession(AsyncSession):
         try:
             return await super().execute(statement, *args, **kwargs)
         except OperationalError as e:
-            # If we were querying the replica and it failed, failover to primary
-            if not force_primary_var.get():
+            if not self._has_written and not force_primary_var.get():
                 logger.warning(
                     f"Replica DB connection failed. Falling back to Primary. Error: {e}"
                 )
                 force_primary_var.set(True)
 
-                # Rollback the broken replica transaction state and retry the query on primary
                 await self.rollback()
                 return await super().execute(statement, *args, **kwargs)
             raise

@@ -17,7 +17,7 @@ from auth.services.email_verification_service import EmailVerificationService
 from auth.services.token_service import TokenService
 from core.database import get_db
 from core.limiter import limiter
-from user.dependencies import get_user_repository, get_user_service
+from user.dependencies import get_current_user, get_user_repository, get_user_service
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import (
@@ -61,17 +61,8 @@ async def create_user(
 
 @user_router.get("/get", response_model=UserResponse)
 async def get_user(
-    service: UserService = Depends(get_user_service),
-    payload: TokenPayload = Depends(
-        auth.token_required(type="access", locations=["headers"])
-    ),
-) -> User | None:
-    user_id = UUID(payload.sub)
-    user = await service.get(user_id)
-
-    if user is None:
-        raise HTTPException(404, "User not found")
-
+    user: User = Depends(get_current_user),
+) -> User:
     return user
 
 

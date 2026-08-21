@@ -49,7 +49,7 @@ def test_validation_error_returns_problem_details():
     data = response.json()
     assert data["status"] == 422
     assert data["title"] == "Unprocessable Entity"
-    assert data["detail"] == "One or more fields failed request validation."
+    assert data["detail"] == "Request validation failed"
     assert "instance" in data
     assert "correlation_id" in data
 
@@ -72,8 +72,8 @@ def test_domain_exception_returns_problem_details():
     data = response.json()
     assert data["status"] == 404
     assert data["title"] == "Entity Not Found"
-    assert "User with id 123 was not found" in data["detail"]
-    assert data["type"] == "about:blank"  # Default unless customized
+    assert "User with identifier '123' was not found" in data["detail"]
+    assert data["type"] == "errors/not-found"
 
 
 def test_standard_http_exception_returns_problem_details():
@@ -96,7 +96,7 @@ def test_unhandled_exception_returns_500_problem_details():
     data = response.json()
     assert data["status"] == 500
     assert data["title"] == "Internal Server Error"
-    assert data["detail"] == "An internal server error occurred."
+    assert data["detail"] == "Internal server error"
     # The actual "Database connection lost" message is logged, but intentionally hidden from the client
 
 

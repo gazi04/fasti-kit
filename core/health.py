@@ -35,32 +35,25 @@ async def liveness() -> dict[str, str]:
 @health_router.get("/ready")
 async def readiness(response: Response) -> dict:
     """Validates connectivity to Primary PostgreSQL, Replica PostgreSQL, and Redis."""
+    results = await asyncio.gather(
+        asyncio.wait_for(_check_primary_database(), timeout=2.0),
+        asyncio.wait_for(_check_replica_database(), timeout=2.0),
+        asyncio.wait_for(_check_redis(), timeout=2.0),
+        return_exceptions=True,
+    )
+
     checks = {}
     is_healthy = True
 
-    try:
-        await asyncio.wait_for(_check_primary_database(), timeout=2.0)
-        checks["database_primary"] = "ok"
-    except Exception as err:
-        logger.error(f"Readiness probe failed for primary database: {err}")
-        checks["database_primary"] = f"unhealthy: {err}"
-        is_healthy = False
-
-    try:
-        await asyncio.wait_for(_check_replica_database(), timeout=2.0)
-        checks["database_replica"] = "ok"
-    except Exception as err:
-        logger.error(f"Readiness probe failed for replica database: {err}")
-        checks["database_replica"] = f"unhealthy: {err}"
-        is_healthy = False
-
-    try:
-        await asyncio.wait_for(_check_redis(), timeout=2.0)
-        checks["redis"] = "ok"
-    except Exception as err:
-        logger.error(f"Readiness probe failed for redis: {err}")
-        checks["redis"] = f"unhealthy: {err}"
-        is_healthy = False
+    for name, result in zip(
+        ("database_primary", "database_replica", "redis"), results, strict=True
+    ):
+        if isinstance(result, Exception):
+            logger.error(f"Readiness probe failed for {name}: {result}")
+            checks[name] = f"unhealthy: {result}"
+            is_healthy = False
+        else:
+            checks[name] = "ok"
 
     if not is_healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

@@ -22,14 +22,6 @@ def _increment_query_count(*args, **kwargs) -> None:
     _query_count.set(_query_count.get() + 1)
 
 
-event.listen(
-    primary_engine.sync_engine, "before_cursor_execute", _increment_query_count
-)
-event.listen(
-    replica_engine.sync_engine, "before_cursor_execute", _increment_query_count
-)
-
-
 class N1DetectorMiddleware:
     _listeners_attached: bool = False
 
@@ -93,7 +85,7 @@ class N1DetectorMiddleware:
             response = problem_response(
                 request,
                 500,
-                detail="An internal server error occurred.",
+                detail="Internal server error",
                 title="Internal Server Error",
             )
             await response(scope, receive, send)

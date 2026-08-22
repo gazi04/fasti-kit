@@ -1,8 +1,11 @@
+import logging
+
 from sqlalchemy import text
 
 from core.database import primary_engine, replica_engine
 from core.setting import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -23,11 +26,11 @@ async def check_database() -> None:
     try:
         async with replica_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-    except Exception as err:
-        raise StartupCheckError(
-            f"Cannot reach Replica Postgres at {settings.get_replica_url!r}. "
-            f"Is it running? Try: docker compose up -d"
-        ) from err
+    except Exception:
+        logger.warning(
+            f"Replica Postgres at {settings.get_replica_url!r} is not reachable. "
+            f"Read traffic will route to primary until it is available."
+        )
 
 
 async def check_mail_config() -> None:

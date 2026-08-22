@@ -162,7 +162,7 @@ async def rate_limit_exception_handler(
         request,
         429,
         detail=f"Rate limit exceeded: {exc.detail}",
-        title="Too Many Request",
+        title="Too Many Requests",
     )
 
     limiter = getattr(request.app.state, "limiter", None)

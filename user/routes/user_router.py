@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.dependencies import auth
 from auth.services.email_verification_service import EmailVerificationService
 from auth.services.token_service import TokenService
+from core.cache import invalidate_tags
 from core.database import get_db
 from core.limiter import limiter
 from user.dependencies import get_current_user, get_user_repository, get_user_service
@@ -98,12 +99,15 @@ async def delete_user(
     ),
 ):
     user_id = UUID(payload.sub)
-    deleted = await service.delete(user_id)
+    deleted = await service.delete(user_id, auto_commit=False)
 
     if deleted is None:
         raise HTTPException(404, "User not found")
 
-    await TokenService.revoke_tokens(request, payload, db)
+    await TokenService.revoke_tokens(request, payload, db, auto_commit=False)
+    await db.commit()
+    await invalidate_tags("users")
+
     auth.unset_refresh_cookies(response)
     return {"message": "User deleted"}
 

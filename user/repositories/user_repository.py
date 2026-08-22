@@ -40,7 +40,7 @@ class UserRepository:
 
         return self._to_entity(result)
 
-    async def update(self, id: UUID, **fields) -> User | None:
+    async def update(self, id: UUID, auto_commit: bool = True, **fields) -> User | None:
         force_primary_var.set(True)
         user = await self.db.get(UserModel, id)
 
@@ -50,11 +50,15 @@ class UserRepository:
         for key, value in fields.items():
             setattr(user, key, value)
 
-        await self._commit_or_raise()
-        await self.db.refresh(user)
+        if auto_commit:
+            await self._commit_or_raise()
+            await self.db.refresh(user)
+        else:
+            await self.db.flush()
+
         return self._to_entity(user)
 
-    async def delete(self, id: UUID) -> User | None:
+    async def delete(self, id: UUID, auto_commit: bool = True) -> User | None:
         force_primary_var.set(True)
         user = await self.db.get(UserModel, id)
 
@@ -62,11 +66,16 @@ class UserRepository:
             return
 
         user.is_active = False
-        await self.db.commit()
-        await self.db.refresh(user)
+
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(user)
+        else:
+            await self.db.flush()
+
         return self._to_entity(user)
 
-    async def force_delete(self, id: UUID) -> User | None:
+    async def force_delete(self, id: UUID, auto_commit: bool = True) -> User | None:
         force_primary_var.set(True)
         user = await self.db.get(UserModel, id)
 
@@ -75,7 +84,12 @@ class UserRepository:
         result = self._to_entity(user)
 
         await self.db.delete(user)
-        await self.db.commit()
+
+        if auto_commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
+
         return result
 
     async def list(self, params: CursorParams | None = None) -> CursorPage[User]:

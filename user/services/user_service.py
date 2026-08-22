@@ -23,25 +23,26 @@ class UserService:
         return await self.repo.get(user_id)
 
     async def update(self, user_id: UUID, data: UpdateUserRequest) -> User | None:
-        data.password = (
-            SecurityService.hash_password(data.password) if data.password else None
-        )
-        result = await self.repo.update(
-            id=user_id, **data.model_dump(exclude_unset=True)
-        )
+        fields = data.model_dump(exclude_unset=True, exclude={"password"})
+        if data.password is not None:
+            fields["password_hash"] = SecurityService.hash_password(data.password)
+
+        result = await self.repo.update(id=user_id, **fields)
 
         if result:
             await invalidate_tags("users")
 
         return result
 
-    async def delete(self, user_id: UUID, force: bool = False) -> User | None:
+    async def delete(
+        self, user_id: UUID, force: bool = False, auto_commit: bool = True
+    ) -> User | None:
         if force:
-            result = await self.repo.force_delete(user_id)
+            result = await self.repo.force_delete(user_id, auto_commit=auto_commit)
         else:
-            result = await self.repo.delete(user_id)
+            result = await self.repo.delete(user_id, auto_commit=auto_commit)
 
-        if result:
+        if result and auto_commit:
             await invalidate_tags("users")
 
         return result

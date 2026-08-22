@@ -12,11 +12,15 @@ settings = get_settings()
 
 class TokenService:
     @staticmethod
-    async def revoke_tokens(request: Request, payload: TokenPayload, db):
+    async def revoke_tokens(
+        request: Request, payload: TokenPayload, db, auto_commit: bool = True
+    ):
         repo = RevokedTokenRepository(db)
         if payload.jti is not None:
             with contextlib.suppress(ValueError):
-                await repo.add(payload.jti, payload.expiry_datetime)
+                await repo.add(
+                    payload.jti, payload.expiry_datetime, auto_commit=auto_commit
+                )
 
         refresh_token = request.cookies.get(auth.config.JWT_REFRESH_COOKIE_NAME)
         if refresh_token:
@@ -28,4 +32,8 @@ class TokenService:
                     verify=True,
                 )
                 if refresh_payload.jti is not None:
-                    await repo.add(refresh_payload.jti, refresh_payload.expiry_datetime)
+                    await repo.add(
+                        refresh_payload.jti,
+                        refresh_payload.expiry_datetime,
+                        auto_commit=auto_commit,
+                    )

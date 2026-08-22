@@ -20,16 +20,15 @@ class RevokedTokenRepository:
         model = RevokedTokenModel(jti=jti, expires_at=expires_at)
         self.db.add(model)
 
-        if auto_commit:
-            try:
-                await self.db.commit()
-            except IntegrityError as err:
-                await self.db.rollback()
-                raise ValueError("Token already used") from err
+        try:
+            async with self.db.begin_nested():
+                await self.db.flush()
+        except IntegrityError as err:
+            raise ValueError("Token already used") from err
 
+        if auto_commit:
+            await self.db.commit()
             await self.db.refresh(model)
-        else:
-            await self.db.flush()
 
         return self._to_entity(model)
 

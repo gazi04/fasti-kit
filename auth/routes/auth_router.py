@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import jwt
 from authx import TokenPayload
@@ -39,6 +39,11 @@ from user.repositories.user_repository import UserRepository
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"], route_class=DeprecationRoute)
 
+# Precomputed once at import time so a login for a nonexistent/inactive/
+# unverified account still pays the same bcrypt cost as a real password
+# check — otherwise response timing leaks account-state to an attacker.
+_DUMMY_PASSWORD_HASH = SecurityService.hash_password(uuid4().hex)
+
 
 @auth_router.post("/login", responses=problem_responses(401, 422, 500))
 @limiter.limit("5/minute")
@@ -51,12 +56,10 @@ async def login(
     force_primary_var.set(True)
     user = await user_repository.get_by_email(data.email)
 
-    if (
-        user is None
-        or not user.is_active
-        or not user.is_verified
-        or not SecurityService.check_password(data.password, user.password_hash)
-    ):
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_ok = SecurityService.check_password(data.password, password_hash)
+
+    if user is None or not password_ok or not user.is_active or not user.is_verified:
         raise HTTPException(401, detail="Invalid credentials")
 
     token = auth.create_access_token(uid=str(user.id), scopes=user.scopes.split())
@@ -116,6 +119,7 @@ async def verify_email(
     request: Request,
     user_repo: UserRepository = Depends(get_user_repository),
     token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     force_primary_var.set(True)
     try:
@@ -138,13 +142,15 @@ async def verify_email(
             400, detail="Verification link has been superseded by a newer request"
         )
 
-    await user_repo.update(id=user.id, is_verified=True)
+    await user_repo.update(id=user.id, is_verified=True, auto_commit=False)
 
     expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
 
     try:
-        await token_repo.add(payload["jti"], expires_at)
+        await token_repo.add(payload["jti"], expires_at, auto_commit=False)
+        await db.commit()
     except (ValueError, IntegrityError) as err:
+        await db.rollback()
         raise HTTPException(400, detail="Verification link already used") from err
 
     return {"message": "Email verified"}
@@ -208,6 +214,7 @@ async def reset_password(
     request: Request,
     user_repo: UserRepository = Depends(get_user_repository),
     token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     force_primary_var.set(True)
     try:
@@ -231,12 +238,14 @@ async def reset_password(
         )
 
     new_hash = SecurityService.hash_password(data.new_password)
-    await user_repo.update(id=user.id, password_hash=new_hash)
+    await user_repo.update(id=user.id, password_hash=new_hash, auto_commit=False)
 
     expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
     try:
-        await token_repo.add(payload["jti"], expires_at)
+        await token_repo.add(payload["jti"], expires_at, auto_commit=False)
+        await db.commit()
     except (ValueError, IntegrityError) as err:
+        await db.rollback()
         raise HTTPException(400, detail="Reset link already used") from err
 
     return {"message": "Password has been reset"}

@@ -15,6 +15,7 @@ from core.limiter import limiter
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import CorrelationIdMiddleware
 from core.middlewares.n1_detector import N1DetectorMiddleware
+from core.middlewares.security_headers import SecurityHeadersMiddleware
 from core.openapi import setup_openapi
 from core.problem import install_problem_handlers
 from core.setting import get_settings
@@ -53,10 +54,15 @@ install_auth_error_handlers(app)
 auth.handle_errors(app)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    include_hsts=settings.environment == "production",
+)
 app.add_middleware(CorrelationIdMiddleware)
 
 if settings.environment == "local":
     app.add_middleware(N1DetectorMiddleware, threshold=10)
+
 
 app.add_middleware(
     CORSMiddleware,

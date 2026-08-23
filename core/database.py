@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.sql.expression import Delete, Insert, Select, Update
 
@@ -71,10 +71,13 @@ attach_pool_listeners(primary_engine.sync_engine)
 attach_pool_listeners(replica_engine.sync_engine)
 
 
-class AsyncResilientRoutingSession(AsyncSession):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._has_written = False
+class RoutingSession(Session):
+    """Routes reads to the replica and writes to the primary.
+
+    This must live on the *sync* Session: AsyncSession proxies execution to
+    a sync Session, and SQLAlchemy resolves binds there — an override on the
+    AsyncSession subclass is never consulted.
+    """
 
     def get_bind(
         self,
@@ -94,7 +97,6 @@ class AsyncResilientRoutingSession(AsyncSession):
         # 2. Inspect the AST of the SQL clause
         if clause is not None:
             if isinstance(clause, (Insert, Update, Delete)):
-                self._has_written = True
                 force_primary_var.set(True)
                 return primary_engine.sync_engine
 
@@ -106,19 +108,35 @@ class AsyncResilientRoutingSession(AsyncSession):
                 if query_text.startswith(
                     ("insert", "update", "delete", "create", "drop", "alter")
                 ):
-                    self._has_written = True
                     force_primary_var.set(True)
                     return primary_engine.sync_engine
 
         # Default safety net
         return primary_engine.sync_engine
 
+
+@event.listens_for(RoutingSession, "before_flush")
+def _pin_primary_on_flush(session, flush_context, instances) -> None:
+    """Pin the request to primary before an ORM flush emits its writes.
+
+    get_bind() only sees an Insert/Update/Delete clause for Core-style
+    statements. A unit-of-work flush calls it with `mapper` set and
+    `clause=None`, which lands on the primary safety net but would never
+    set the sticky flag — leaving a later read free to hit a lagging
+    replica and miss the write it just made.
+    """
+    force_primary_var.set(True)
+
+
+class AsyncResilientRoutingSession(AsyncSession):
+    sync_session_class = RoutingSession
+
     async def execute(self, statement, *args, **kwargs):
         """Catches Replica connection errors and automatically fails over to Primary."""
         try:
             return await super().execute(statement, *args, **kwargs)
         except OperationalError as e:
-            if not self._has_written and not force_primary_var.get():
+            if not force_primary_var.get():
                 logger.warning(
                     f"Replica DB connection failed. Falling back to Primary. Error: {e}"
                 )
@@ -130,7 +148,10 @@ class AsyncResilientRoutingSession(AsyncSession):
 
 
 AsyncSessionLocal = async_sessionmaker(
-    class_=AsyncResilientRoutingSession, autocommit=False, autoflush=False
+    class_=AsyncResilientRoutingSession,
+    sync_session_class=RoutingSession,
+    autocommit=False,
+    autoflush=False,
 )
 
 

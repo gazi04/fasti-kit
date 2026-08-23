@@ -7,7 +7,6 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi_pagination import add_pagination
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from auth.dependencies import auth
 from auth.errors import install_auth_error_handlers
 from core.api_versions import v1_router
 from core.health import health_router
@@ -50,8 +49,6 @@ app = FastAPI(title="Title", lifespan=lifespan)
 app.state.limiter = limiter
 install_problem_handlers(app)
 install_auth_error_handlers(app)
-
-auth.handle_errors(app)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(

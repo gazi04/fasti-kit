@@ -8,7 +8,12 @@ so all writes are automatically discarded after each test.
 import uuid
 
 import pytest
+from authx import TokenPayload
+from fastapi import HTTPException
 
+from auth.dependencies import auth
+from core.setting import get_settings
+from user.dependencies import get_current_user
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import CreateUserRequest, UpdateUserRequest
@@ -91,15 +96,25 @@ async def test_repository_update_returns_none_for_missing(db) -> None:
     assert result is None
 
 
-async def test_repository_update_skips_none_values(db) -> None:
-    """update() does not overwrite fields whose value is None."""
+async def test_repository_update_can_clear_nullable_field(db) -> None:
+    """update() writes None through to nullable columns.
+
+    The old "skip None values" guard was removed on purpose so pending token
+    fields can be cleared once consumed — see the verify-email/reset-password
+    flows in auth_router.py.
+    """
     repo = UserRepository(db)
     email = _make_email()
     user = await repo.add("Dana Kept", email, "hashed_pw")
 
-    updated = await repo.update(user.id, full_name=None, email=email)
-    assert updated is not None
-    assert updated.full_name == "Dana Kept"  # unchanged because None was skipped
+    seeded = await repo.update(user.id, pending_verification_jti="abc123")
+    assert seeded is not None
+    assert seeded.pending_verification_jti == "abc123"
+
+    cleared = await repo.update(user.id, pending_verification_jti=None)
+    assert cleared is not None
+    assert cleared.pending_verification_jti is None
+    assert cleared.full_name == "Dana Kept"  # untouched fields survive
 
 
 async def test_repository_soft_delete(db) -> None:
@@ -246,3 +261,53 @@ async def test_service_force_delete(db) -> None:
 
     gone = await repo.get(created.id)
     assert gone is None
+
+
+# ---------------------------------------------------------------------------
+# get_current_user dependency
+#
+# Called directly (repo + payload arguments) rather than over HTTP so the
+# test does not go through authx's blocklist callback, which opens its own
+# AsyncSessionLocal against the dev database instead of the test database.
+# ---------------------------------------------------------------------------
+
+
+def _payload_for(user_id: uuid.UUID) -> TokenPayload:
+    token = auth.create_access_token(uid=str(user_id))
+    settings = get_settings()
+    return TokenPayload.decode(
+        token,
+        key=settings.jwt_secret_key,
+        algorithms=[settings.jwt_algorithm],
+        verify=True,
+    )
+
+
+async def test_get_current_user_returns_active_user(db) -> None:
+    repo = UserRepository(db)
+    created = await repo.add("Mia Current", _make_email(), "pw")
+
+    current = await get_current_user(user_repo=repo, payload=_payload_for(created.id))
+
+    assert current.id == created.id
+    assert current.is_active is True
+
+
+async def test_get_current_user_raises_404_for_unknown_sub(db) -> None:
+    repo = UserRepository(db)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(user_repo=repo, payload=_payload_for(uuid.uuid4()))
+
+    assert exc_info.value.status_code == 404
+
+
+async def test_get_current_user_raises_403_for_deactivated_user(db) -> None:
+    repo = UserRepository(db)
+    created = await repo.add("Nina Deleted", _make_email(), "pw")
+    await repo.update(created.id, is_active=False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(user_repo=repo, payload=_payload_for(created.id))
+
+    assert exc_info.value.status_code == 403

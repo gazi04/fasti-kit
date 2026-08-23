@@ -4,12 +4,27 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from core.database import Base, get_db
+from core.redis import redis
 from core.setting import get_settings
 from main import app
 
 settings = get_settings()
 # Use a dedicated test database (e.g. localhost:5433 from docker-compose setup)
 TEST_DATABASE_URL = settings.database_url.replace("fasti_kit", "fasti_kit_test")
+
+
+@pytest.fixture(autouse=True)
+async def _reset_redis_pool():
+    """
+    Dispose the shared Redis connection pool after every test.
+
+    core/redis.py builds one module-level client at import time, and redis-py
+    lazily binds its pool to whichever event loop first uses it. pytest-asyncio
+    gives each test a fresh loop, so without this the second test to touch the
+    cache reuses connections owned by a closed loop ("Event loop is closed").
+    """
+    yield
+    await redis.aclose()
 
 
 @pytest.fixture

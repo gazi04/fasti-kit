@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from limits import parse
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from slowapi.wrappers import Limit
 
 from core.exception import EntityNotFoundError
 from core.problem import PROBLEM_MEDIA_TYPE, install_problem_handlers
@@ -31,12 +34,30 @@ async def trigger_unhandled():
     raise ValueError("Database connection lost")
 
 
+def _make_limit(error_message: str) -> Limit:
+    """Build a real slowapi Limit — RateLimitExceeded reads .error_message off
+    it during construction, so a bare string raises AttributeError."""
+    return Limit(
+        limit=parse("5/minute"),
+        key_func=get_remote_address,
+        scope=None,
+        per_method=False,
+        methods=None,
+        error_message=error_message,
+        exempt_when=None,
+        cost=1,
+        override_defaults=False,
+    )
+
+
 @app.get("/rate-limit")
 async def trigger_rate_limit():
-    raise RateLimitExceeded(limit="Limit exceeded")  # type: ignore[arg-type]
+    raise RateLimitExceeded(_make_limit("Limit exceeded"))
 
 
-client = TestClient(app)
+# raise_server_exceptions=False so the registered Exception handler's 500
+# response is returned instead of the exception propagating into the test.
+client = TestClient(app, raise_server_exceptions=False)
 
 
 def test_validation_error_returns_problem_details():

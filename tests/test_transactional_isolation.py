@@ -41,6 +41,11 @@ async def test_c_async_session_local_leakage(db):
     Test 3: Assert that direct usage of AsyncSessionLocal runs on
     a different connection and doesn't see the uncommitted transaction
     of the test, and doesn't get rolled back.
+
+    Unlike the rest of the suite, this deliberately uses the application's
+    real AsyncSessionLocal factory — and therefore reads the dev database
+    rather than fasti_kit_test. That separation is exactly the boundary
+    under test, so it must not be pointed at the test session.
     """
 
     user = UserModel(
@@ -60,7 +65,10 @@ async def test_c_async_session_local_leakage(db):
                 )
             )
             user_found = result.scalar_one_or_none()
-            print(f"Session2 user found: {user_found}")
+            assert user_found is None, (
+                "AsyncSessionLocal session should not see uncommitted data "
+                "from the test session"
+            )
     except Exception as e:
         print(f"AsyncSessionLocal error: {e}")
         raise

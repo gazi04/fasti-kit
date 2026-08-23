@@ -29,9 +29,7 @@ async def send_email_task(ctx, subject: str, recipients: list[str], body: str):
 async def cleanup_revoked_tokens_task(ctx):
     logger.info("Starting background cleanup of expired revoked tokens")
     async with AsyncSessionLocal() as db:
-        await db.execute(
-            text("DELETE FROM revoked_tokens WHERE expiry_datetime <= NOW()")
-        )
+        await db.execute(text("DELETE FROM revoked_tokens WHERE expires_at <= NOW()"))
         await db.commit()
     logger.info("Successfully cleaned up expired tokens")
     return {"status": "completed"}

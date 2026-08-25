@@ -26,6 +26,10 @@ force_primary_var: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "force_primary", default=False
 )
 
+bind_override_var: contextvars.ContextVar = contextvars.ContextVar(
+    "bind_override", default=None
+)
+
 
 def create_engine(url: str):
     return create_async_engine(
@@ -90,6 +94,11 @@ class RoutingSession(Session):
     ):
         """Intelligently routes queries and enforces 'sticky' primary connections."""
 
+        # 0. Test escape hatch — bypass routing entirely when pinned to one bind
+        override = bind_override_var.get()
+        if override is not None:
+            return override
+
         # 1. If a write previously occurred in this request, pin everything to primary
         if force_primary_var.get():
             return primary_engine.sync_engine
@@ -129,22 +138,70 @@ def _pin_primary_on_flush(session, flush_context, instances) -> None:
 
 
 class AsyncResilientRoutingSession(AsyncSession):
+    """Fails a replica read over to the primary, without ever trading away a write.
+
+    The failover must wrap more than execute(): AsyncSession.scalar() and .get()
+    call greenlet_spawn(self.sync_session.X, ...) directly and never dispatch
+    through self.execute(), so an execute()-only override misses every read this
+    codebase actually performs. scalars() is deliberately NOT overridden — it
+    delegates to self.execute() and would double-wrap the retry.
+    """
+
     sync_session_class = RoutingSession
 
-    async def execute(self, statement, *args, **kwargs):
-        """Catches Replica connection errors and automatically fails over to Primary."""
-        try:
-            return await super().execute(statement, *args, **kwargs)
-        except OperationalError as e:
-            if not force_primary_var.get():
-                logger.warning(
-                    f"Replica DB connection failed. Falling back to Primary. Error: {e}"
-                )
-                force_primary_var.set(True)
+    def _can_fail_over(self) -> bool:
+        """True only when a rollback would destroy nothing.
 
-                await self.rollback()
-                return await super().execute(statement, *args, **kwargs)
-            raise
+        Retrying on the primary requires rolling back the failed transaction
+        first — Postgres refuses further work on an aborted one. That rollback
+        is transaction-wide, so it is only safe while the session holds no work:
+
+        - force_primary_var means a write already routed to primary (set by the
+          repositories, by get_bind() on Insert/Update/Delete, and by the
+          before_flush listener). A replica read cannot have been the failure.
+        - new/dirty/deleted means pending, *unflushed* ORM work. autoflush is
+          off, so `db.add(model)` sits pending with no flag set; rolling back
+          would expunge it, the retry would succeed, and the later commit()
+          would write nothing while the route returned 200.
+
+        NOT `self.in_transaction()`: SQLAlchemy opens a transaction on the first
+        read too, so that is True after any query and would disable failover.
+        """
+        if force_primary_var.get():
+            return False
+
+        sync = self.sync_session
+        return not (sync.new or sync.dirty or sync.deleted)
+
+    async def _with_failover(self, operation):
+        try:
+            return await operation()
+        except OperationalError as e:
+            if not self._can_fail_over():
+                raise
+
+            logger.warning(
+                f"Replica DB connection failed. Falling back to Primary. Error: {e}"
+            )
+            force_primary_var.set(True)
+
+            await self.rollback()
+            return await operation()
+
+    async def execute(self, statement, *args, **kwargs):
+        return await self._with_failover(
+            lambda: AsyncSession.execute(self, statement, *args, **kwargs)
+        )
+
+    async def scalar(self, statement, *args, **kwargs):
+        return await self._with_failover(
+            lambda: AsyncSession.scalar(self, statement, *args, **kwargs)
+        )
+
+    async def get(self, entity, ident, *args, **kwargs):
+        return await self._with_failover(
+            lambda: AsyncSession.get(self, entity, ident, *args, **kwargs)
+        )
 
 
 AsyncSessionLocal = async_sessionmaker(

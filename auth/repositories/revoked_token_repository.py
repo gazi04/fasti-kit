@@ -33,14 +33,16 @@ class RevokedTokenRepository:
         return self._to_entity(model)
 
     async def exists(self, jti: str) -> bool:
-        force_primary_var.set(True)
-
-        result = await self.db.scalar(
-            select(RevokedTokenModel).where(
-                RevokedTokenModel.jti == jti,
-                RevokedTokenModel.expires_at > datetime.now(UTC),
+        token = force_primary_var.set(True)
+        try:
+            result = await self.db.scalar(
+                select(RevokedTokenModel).where(
+                    RevokedTokenModel.jti == jti,
+                    RevokedTokenModel.expires_at > datetime.now(UTC),
+                )
             )
-        )
+        finally:
+            force_primary_var.reset(token)
 
         return result is not None
 

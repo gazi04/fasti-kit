@@ -37,19 +37,30 @@ async def create_user(
     data: CreateUserRequest,
     request: Request,
     background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: UserService = Depends(get_user_service),
 ) -> User:
+    """Create the user and stamp its verification jti in a single transaction.
+
+    Both writes used to commit independently: if the jti update failed, the
+    account already existed unverified with a NULL jti, and the caller's retry
+    hit a 409 with no way back except /resend-verification. auto_commit=False
+    on both plus one caller-owned commit makes the signup all-or-nothing —
+    the same pattern verify_email, reset_password and delete_user use.
+    """
     try:
-        user = await service.register(data)
+        user = await service.register(data, auto_commit=False)
     except ValueError as err:
         raise HTTPException(409, "Email already in use") from err
 
     token, jti = EmailVerificationService.create_verification_token(str(user.id))
 
     try:
-        await user_repo.update(user.id, pending_verification_jti=jti)
+        await user_repo.update(user.id, pending_verification_jti=jti, auto_commit=False)
+        await db.commit()
     except Exception as err:
+        await db.rollback()
         raise HTTPException(
             500, detail="Failed to schedule verification email"
         ) from err

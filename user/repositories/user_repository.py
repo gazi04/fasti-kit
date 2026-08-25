@@ -15,13 +15,22 @@ class UserRepository:
     def __init__(self, db) -> None:
         self.db: AsyncSession = db
 
-    async def add(self, full_name: str, email: str, password_hash: str) -> User:
+    async def add(
+        self,
+        full_name: str,
+        email: str,
+        password_hash: str,
+        auto_commit: bool = True,
+    ) -> User:
         force_primary_var.set(True)
         model = UserModel(full_name=full_name, email=email, password_hash=password_hash)
-        self.db.add(model)
 
-        await self._commit_or_raise()
-        await self.db.refresh(model)
+        await self._flush_or_raise(model)
+
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(model)
+
         return self._to_entity(model)
 
     async def get(self, id: UUID) -> User | None:
@@ -51,10 +60,11 @@ class UserRepository:
             setattr(user, key, value)
 
         if auto_commit:
-            await self._commit_or_raise()
+            await self._flush_or_raise()
+            await self.db.commit()
             await self.db.refresh(user)
         else:
-            await self.db.flush()
+            await self._flush_or_raise()
 
         return self._to_entity(user)
 
@@ -102,11 +112,25 @@ class UserRepository:
             transformer=lambda models: [self._to_entity(model) for model in models],
         )
 
-    async def _commit_or_raise(self) -> None:
+    async def _flush_or_raise(self, model: UserModel | None = None) -> None:
+        """Flush inside a SAVEPOINT so a constraint violation stays contained.
+
+        The old _commit_or_raise() called db.rollback() on IntegrityError —
+        transaction-wide, which would destroy a caller-owned transaction on a
+        duplicate email.
+
+        `model` is added *inside* the savepoint on purpose. A pending object
+        added beforehand belongs to the outer SessionTransaction, and a flush
+        failure then deactivates that outer transaction too — every later
+        statement raises PendingRollbackError, which is exactly what the
+        savepoint was supposed to prevent.
+        """
         try:
-            await self.db.commit()
+            async with self.db.begin_nested():
+                if model is not None:
+                    self.db.add(model)
+                await self.db.flush()
         except IntegrityError as err:
-            await self.db.rollback()
             if "email" in str(err.orig).lower():
                 raise ValueError("Email taken") from err
             raise

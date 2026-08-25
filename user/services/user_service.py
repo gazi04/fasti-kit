@@ -14,9 +14,11 @@ class UserService:
     def __init__(self, repo: UserRepository) -> None:
         self.repo = repo
 
-    async def register(self, data: CreateUserRequest) -> User:
+    async def register(self, data: CreateUserRequest, auto_commit: bool = True) -> User:
         password_hash = SecurityService.hash_password(data.password)
-        return await self.repo.add(data.name, data.email, password_hash)
+        return await self.repo.add(
+            data.name, data.email, password_hash, auto_commit=auto_commit
+        )
 
     @cache(ttl=3600, tags=["users"])
     async def get(self, user_id: UUID) -> User | None:

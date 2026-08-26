@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from core.database import AsyncSessionLocal
+from core.database import AsyncSessionLocal, bind_override_var
 from user.models.user_model import UserModel
 
 
@@ -46,7 +46,15 @@ async def test_c_async_session_local_leakage(db):
     real AsyncSessionLocal factory — and therefore reads the dev database
     rather than fasti_kit_test. That separation is exactly the boundary
     under test, so it must not be pointed at the test session.
+
+    The `db` fixture pins the routing session to the test connection via
+    bind_override_var so the real session class can be exercised against
+    fasti_kit_test. This test is the one place that must opt back out: with
+    the override active, AsyncSessionLocal() would resolve to the very same
+    connection and the separation under test would be invisible.
     """
+
+    override_token = bind_override_var.set(None)
 
     user = UserModel(
         email="test_leakage_check@example.com",
@@ -72,3 +80,5 @@ async def test_c_async_session_local_leakage(db):
     except Exception as e:
         print(f"AsyncSessionLocal error: {e}")
         raise
+    finally:
+        bind_override_var.reset(override_token)

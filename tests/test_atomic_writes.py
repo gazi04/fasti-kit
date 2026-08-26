@@ -80,3 +80,29 @@ async def test_delete_rolls_back_when_paired_token_write_fails(db) -> None:
     reverted = await user_repo.get(user.id)
     assert reverted is not None
     assert reverted.is_active is True
+
+
+async def test_add_duplicate_jti_raises_cleanly_without_caller_rollback(db) -> None:
+    """Direct regression test for the containment bug: a duplicate jti must raise
+    ValueError from inside add()'s own savepoint, leaving the outer transaction
+    (and any earlier write in it) healthy — no PendingRollbackError, and no
+    caller-side db.rollback() required to keep using the session."""
+    user_repo = UserRepository(db)
+    token_repo = RevokedTokenRepository(db)
+
+    user = await user_repo.add(
+        "Containment Check", _make_email(), "hash", auto_commit=False
+    )
+
+    jti = uuid.uuid4().hex
+    expires_at = datetime.now(UTC) + timedelta(hours=1)
+    await token_repo.add(jti, expires_at, auto_commit=False)
+
+    with pytest.raises(ValueError, match="Token already used"):
+        await token_repo.add(jti, expires_at, auto_commit=False)
+
+    # No db.rollback() here — the outer transaction must still be usable.
+    await db.commit()
+
+    committed_user = await user_repo.get(user.id)
+    assert committed_user is not None

@@ -1,9 +1,18 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 
-from core.database import Base, get_db
+import auth.dependencies as auth_dependencies
+from core.database import (
+    AsyncResilientRoutingSession,
+    Base,
+    bind_override_var,
+    force_primary_var,
+    get_db,
+    primary_engine,
+    replica_engine,
+)
 from core.redis import redis
 from core.setting import get_settings
 from main import app
@@ -25,6 +34,21 @@ async def _reset_redis_pool():
     """
     yield
     await redis.aclose()
+
+
+@pytest.fixture(autouse=True)
+async def _reset_engine_pools():
+    """Dispose the module-level engine pools after every test.
+
+    core/database.py builds primary_engine/replica_engine at import time, and
+    asyncpg binds each pooled connection to the event loop that created it.
+    pytest-asyncio hands every test a fresh loop, so a connection left in a
+    pool by one test fails pool_pre_ping in the next ("Event loop is closed").
+    Same hazard, and same remedy, as _reset_redis_pool above.
+    """
+    yield
+    await primary_engine.dispose()
+    await replica_engine.dispose()
 
 
 @pytest.fixture
@@ -54,10 +78,15 @@ async def db(db_engine):
     # 2. Begin parent transaction
     txn = await conn.begin()
 
-    # 3. Instantiate session bound to this connection.
-    # We turn on join_transaction_mode="create_savepoint" to map commits/rollbacks
-    # to SAVEPOINTs.
-    session = AsyncSession(
+    # 3. Instantiate the *real* application session class, bound to this
+    # connection via the bind-override contextvar. Using a vanilla AsyncSession
+    # here would bypass get_bind(), the before_flush primary-pinning listener
+    # and the failover wrapper — the exact code Findings 3 and 4 live in.
+    # join_transaction_mode="create_savepoint" maps commits/rollbacks to SAVEPOINTs.
+    bind_token = bind_override_var.set(conn.sync_connection)
+    force_token = force_primary_var.set(False)
+
+    session = AsyncResilientRoutingSession(
         bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint"
     )
 
@@ -68,15 +97,49 @@ async def db(db_engine):
         await session.close()
         await txn.rollback()
         await conn.close()
+        force_primary_var.reset(force_token)
+        bind_override_var.reset(bind_token)
+
+
+class _NullCloseSession:
+    """Hand the test session to `async with AsyncSessionLocal() as db` without
+    letting the callback close it — the fixture owns that session's lifetime."""
+
+    def __init__(self, session) -> None:
+        self._session = session
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, *exc_info) -> bool:
+        return False
 
 
 @pytest.fixture
-async def client(db):
+async def client(db, monkeypatch):
     """
     Function-scoped Async HTTP Client. Overrides get_db dependency.
     """
-    # Inject our transactional session into application endpoints
-    app.dependency_overrides[get_db] = lambda: db
+
+    # Inject our transactional session into application endpoints.
+    # A plain `lambda: db` would skip db_session() entirely, leaving
+    # force_primary_var unreset between requests; mirror its contract instead.
+    async def _override_get_db():
+        token = force_primary_var.set(False)
+        try:
+            yield db
+        finally:
+            force_primary_var.reset(token)
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    # is_token_revoked opens its own AsyncSessionLocal() against the *dev*
+    # database, outside the fixture's savepoint. Point it at the test session
+    # so authenticated routes can be exercised end to end.
+    monkeypatch.setattr(
+        auth_dependencies, "AsyncSessionLocal", lambda: _NullCloseSession(db)
+    )
+
     try:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"

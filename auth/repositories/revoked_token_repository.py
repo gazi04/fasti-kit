@@ -18,10 +18,10 @@ class RevokedTokenRepository:
     ) -> RevokedToken:
         force_primary_var.set(True)
         model = RevokedTokenModel(jti=jti, expires_at=expires_at)
-        self.db.add(model)
 
         try:
             async with self.db.begin_nested():
+                self.db.add(model)
                 await self.db.flush()
         except IntegrityError as err:
             raise ValueError("Token already used") from err

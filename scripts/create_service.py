@@ -51,8 +51,10 @@ class {pascal}Service:
     def __init__(self, repo: {pascal}Repository) -> None:
         self.repo = repo
 
-    async def create(self, data: Create{pascal}Request) -> {pascal}:
-        return await self.repo.add(**data.model_dump())
+    async def create(
+        self, data: Create{pascal}Request, auto_commit: bool = True
+    ) -> {pascal}:
+        return await self.repo.add(**data.model_dump(), auto_commit=auto_commit)
 
     async def get(self, id: UUID) -> Optional[{pascal}]:
         return await self.repo.get(id)
@@ -60,11 +62,13 @@ class {pascal}Service:
     async def update(self, id: UUID, data: Update{pascal}Request) -> Optional[{pascal}]:
         return await self.repo.update(id=id, **data.model_dump(exclude_unset=True))
 
-    async def delete(self, id: UUID, force: bool = False) -> Optional[{pascal}]:
+    async def delete(
+        self, id: UUID, force: bool = False, auto_commit: bool = True
+    ) -> Optional[{pascal}]:
         if force:
-            return await self.repo.force_delete(id)
+            return await self.repo.force_delete(id, auto_commit=auto_commit)
 
-        return await self.repo.delete(id)
+        return await self.repo.delete(id, auto_commit=auto_commit)
 """
 
     # 4. Write File & Update __init__.py

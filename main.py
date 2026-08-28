@@ -9,6 +9,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from auth.errors import install_auth_error_handlers
 from core.api_versions import v1_router
+from core.database import dispose_engines
 from core.health import health_router
 from core.limiter import limiter
 from core.logging.setup import setup_logging
@@ -17,6 +18,7 @@ from core.middlewares.n1_detector import N1DetectorMiddleware
 from core.middlewares.security_headers import SecurityHeadersMiddleware
 from core.openapi import setup_openapi
 from core.problem import install_problem_handlers
+from core.redis import close_redis
 from core.setting import get_settings
 from core.startup_checks import (
     StartupCheckError,
@@ -41,8 +43,18 @@ async def lifespan(app: FastAPI):
         logger.error(f"Startup checks failed: {e}")
         raise
 
-    yield
-    logger.info("Application shutting down...")
+    try:
+        yield
+    finally:
+        logger.info("Application shutting down — releasing resources...")
+        for label, closer in (
+            ("database engines", dispose_engines),
+            ("redis", close_redis),
+        ):
+            try:
+                await closer()
+            except Exception:
+                logger.exception("Failed to release %s cleanly on shutdown", label)
 
 
 app = FastAPI(title="Title", lifespan=lifespan)
@@ -80,4 +92,10 @@ Instrumentator().instrument(app).expose(app)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, loop="uvloop", host="127.0.0.1", port=8000)
+    uvicorn.run(
+        app,
+        loop="uvloop",
+        host="127.0.0.1",
+        port=8000,
+        timeout_graceful_shutdown=settings.shutdown_timeout,
+    )

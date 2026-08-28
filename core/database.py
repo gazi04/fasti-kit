@@ -234,3 +234,15 @@ async def db_session() -> AsyncGenerator[AsyncSession]:
 async def get_db() -> AsyncGenerator[AsyncSession]:
     async with db_session() as db:
         yield db
+
+
+async def dispose_engines() -> None:
+    """Close both engine connection pools.
+
+    Idempotent — SQLAlchemy lazily rebuilds a fresh pool on the next connect,
+    so this is safe to call more than once (the test suite already does, via
+    the _reset_engine_pools fixture). Called from the app lifespan shutdown
+    and the SAQ worker's shutdown hook.
+    """
+    await primary_engine.dispose()
+    await replica_engine.dispose()

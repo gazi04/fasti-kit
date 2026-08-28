@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     cache_prefix: str = "fasti-cache"
     cache_default_ttl: int = 3600
 
+    # Seconds uvicorn waits for in-flight requests to finish on SIGTERM/SIGINT
+    # before force-cancelling them.
+    shutdown_timeout: int = 30
+
     database_replica_url: str | None = None
 
     @computed_field

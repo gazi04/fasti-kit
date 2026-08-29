@@ -12,22 +12,16 @@ from authx import TokenPayload
 from fastapi import HTTPException
 
 from auth.dependencies import auth
+from core.factories.user_factory import (
+    CreateUserRequestFactory,
+    UpdateUserRequestFactory,
+    make_email,
+)
 from core.setting import get_settings
 from user.dependencies import get_current_user
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
-from user.schemas.user_schema import CreateUserRequest, UpdateUserRequest
 from user.services.user_service import UserService
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_email() -> str:
-    """Generate a unique email address to avoid unique-constraint conflicts."""
-    return f"test_{uuid.uuid4().hex[:8]}@example.com"
-
 
 # ---------------------------------------------------------------------------
 # UserRepository - direct DB tests
@@ -37,7 +31,7 @@ def _make_email() -> str:
 async def test_repository_add_and_get(db) -> None:
     """add() persists a user; get() retrieves it by id."""
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
 
     user = await repo.add("Alice Test", email, "hashed_pw")
 
@@ -62,7 +56,7 @@ async def test_repository_get_returns_none_for_missing(db) -> None:
 async def test_repository_get_by_email(db) -> None:
     """get_by_email() finds the user by email address."""
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     await repo.add("Bob Test", email, "hashed_pw")
 
     found = await repo.get_by_email(email)
@@ -80,7 +74,7 @@ async def test_repository_get_by_email_returns_none_for_missing(db) -> None:
 async def test_repository_update_full_name(db) -> None:
     """update() applies arbitrary fields to an existing user."""
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     user = await repo.add("Charlie Old", email, "hashed_pw")
 
     updated = await repo.update(user.id, full_name="Charlie New")
@@ -104,7 +98,7 @@ async def test_repository_update_can_clear_nullable_field(db) -> None:
     flows in auth_router.py.
     """
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     user = await repo.add("Dana Kept", email, "hashed_pw")
 
     seeded = await repo.update(user.id, pending_verification_jti="abc123")
@@ -120,7 +114,7 @@ async def test_repository_update_can_clear_nullable_field(db) -> None:
 async def test_repository_soft_delete(db) -> None:
     """delete() marks the user inactive rather than removing the row."""
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     user = await repo.add("Eve Active", email, "hashed_pw")
 
     deleted = await repo.delete(user.id)
@@ -143,7 +137,7 @@ async def test_repository_soft_delete_returns_none_for_missing(db) -> None:
 async def test_repository_force_delete(db) -> None:
     """force_delete() removes the row entirely."""
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     user = await repo.add("Frank Force", email, "hashed_pw")
 
     deleted = await repo.force_delete(user.id)
@@ -164,7 +158,7 @@ async def test_repository_force_delete_returns_none_for_missing(db) -> None:
 async def test_repository_add_raises_on_duplicate_email(db) -> None:
     """add() raises ValueError when the email is already taken."""
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     await repo.add("First", email, "pw1")
 
     with pytest.raises(ValueError, match="Email taken"):
@@ -179,11 +173,7 @@ async def test_repository_add_raises_on_duplicate_email(db) -> None:
 async def test_service_register_hashes_password(db) -> None:
     """register() stores a bcrypt hash, not the raw password."""
     service = UserService(UserRepository(db))
-    data = CreateUserRequest(
-        name="Grace Hash",
-        email=_make_email(),
-        password="plaintext",
-    )
+    data = CreateUserRequestFactory.build(password="plaintext")
 
     user = await service.register(data)
 
@@ -195,7 +185,7 @@ async def test_service_get_returns_user(db) -> None:
     """get() delegates to the repository and returns an entity."""
     repo = UserRepository(db)
     service = UserService(repo)
-    email = _make_email()
+    email = make_email()
     created = await repo.add("Henry Get", email, "pw")
 
     fetched = await service.get(created.id)
@@ -214,10 +204,10 @@ async def test_service_update_hashes_new_password(db) -> None:
     """update() hashes a new password via SecurityService before persisting."""
     repo = UserRepository(db)
     service = UserService(repo)
-    email = _make_email()
+    email = make_email()
     created = await repo.add("Iris Update", email, "old_hash")
 
-    data = UpdateUserRequest(password="new_plain")
+    data = UpdateUserRequestFactory.build(password="new_plain")
     updated = await service.update(created.id, data)
     assert updated is not None
     assert updated.password_hash != "new_plain"
@@ -228,10 +218,10 @@ async def test_service_update_skips_password_when_none(db) -> None:
     """update() does not re-hash when no new password is supplied."""
     repo = UserRepository(db)
     service = UserService(repo)
-    email = _make_email()
+    email = make_email()
     created = await repo.add("Jack NoPass", email, "original_hash")
 
-    data = UpdateUserRequest(full_name="Jack Updated")
+    data = UpdateUserRequestFactory.build(full_name="Jack Updated")
     updated = await service.update(created.id, data)
     assert updated is not None
     assert updated.full_name == "Jack Updated"
@@ -241,7 +231,7 @@ async def test_service_delete_soft(db) -> None:
     """delete() (no force) soft-deletes the user."""
     repo = UserRepository(db)
     service = UserService(repo)
-    email = _make_email()
+    email = make_email()
     created = await repo.add("Karen Del", email, "pw")
 
     deleted = await service.delete(created.id)
@@ -253,7 +243,7 @@ async def test_service_force_delete(db) -> None:
     """delete(force=True) calls force_delete and removes the row."""
     repo = UserRepository(db)
     service = UserService(repo)
-    email = _make_email()
+    email = make_email()
     created = await repo.add("Leo Force", email, "pw")
 
     result = await service.delete(created.id, force=True)
@@ -285,7 +275,7 @@ def _payload_for(user_id: uuid.UUID) -> TokenPayload:
 
 async def test_get_current_user_returns_active_user(db) -> None:
     repo = UserRepository(db)
-    created = await repo.add("Mia Current", _make_email(), "pw")
+    created = await repo.add("Mia Current", make_email(), "pw")
 
     current = await get_current_user(user_repo=repo, payload=_payload_for(created.id))
 
@@ -304,7 +294,7 @@ async def test_get_current_user_raises_404_for_unknown_sub(db) -> None:
 
 async def test_get_current_user_raises_403_for_deactivated_user(db) -> None:
     repo = UserRepository(db)
-    created = await repo.add("Nina Deleted", _make_email(), "pw")
+    created = await repo.add("Nina Deleted", make_email(), "pw")
     await repo.update(created.id, is_active=False)
 
     with pytest.raises(HTTPException) as exc_info:

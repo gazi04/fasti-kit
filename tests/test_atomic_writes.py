@@ -21,11 +21,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
+from core.factories.user_factory import make_email
 from user.repositories.user_repository import UserRepository
-
-
-def _make_email() -> str:
-    return f"test_{uuid.uuid4().hex[:8]}@example.com"
 
 
 async def test_update_rolls_back_when_paired_token_write_fails(db) -> None:
@@ -33,7 +30,7 @@ async def test_update_rolls_back_when_paired_token_write_fails(db) -> None:
     user_repo = UserRepository(db)
     token_repo = RevokedTokenRepository(db)
 
-    user = await user_repo.add("Atomic Update", _make_email(), "hash")
+    user = await user_repo.add("Atomic Update", make_email(), "hash")
     assert user.is_verified is False
 
     jti = uuid.uuid4().hex
@@ -60,7 +57,7 @@ async def test_delete_rolls_back_when_paired_token_write_fails(db) -> None:
     user_repo = UserRepository(db)
     token_repo = RevokedTokenRepository(db)
 
-    user = await user_repo.add("Atomic Delete", _make_email(), "hash")
+    user = await user_repo.add("Atomic Delete", make_email(), "hash")
     assert user.is_active is True
 
     jti = uuid.uuid4().hex
@@ -91,7 +88,7 @@ async def test_add_duplicate_jti_raises_cleanly_without_caller_rollback(db) -> N
     token_repo = RevokedTokenRepository(db)
 
     user = await user_repo.add(
-        "Containment Check", _make_email(), "hash", auto_commit=False
+        "Containment Check", make_email(), "hash", auto_commit=False
     )
 
     jti = uuid.uuid4().hex

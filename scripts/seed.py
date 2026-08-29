@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.services.security_service import SecurityService
 from core.database import AsyncSessionLocal
-from core.factories.user_factory import CreateUserFactory
+from core.factories.user_factory import CreateUserRequestFactory
 from core.safety import SafetyError, ensure_safe_operation
 from user.models.user_model import UserModel
 from user.repositories.user_repository import UserRepository
@@ -19,9 +19,9 @@ ADMIN_SCOPES = "users:read users:write admin:read"
 
 
 def _build_unique_user(used_emails: set[str]) -> CreateUserRequest:
-    request = CreateUserFactory.build()
+    request = CreateUserRequestFactory.build()
     while request.email in used_emails:
-        request = CreateUserFactory.build()
+        request = CreateUserRequestFactory.build()
     used_emails.add(request.email)
     return request
 

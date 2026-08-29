@@ -27,6 +27,7 @@ dependencies = [
     "fastapi-pagination>=0.15.16",
     "sqlakeyset>=2.0.1775222100",
     "rich>=15.0.0",
+    "polyfactory>=3.3.0",
 ]
 
 [build-system]
@@ -52,7 +53,6 @@ dev = [
     "httpx>=0.28.1",
     "import-linter>=2.13",
     "pip-audit>=2.10.1",
-    "polyfactory>=3.3.0",
     "pre-commit>=4.6.1",
     "prometheus-fastapi-instrumentator>=8.1.0",
     "py-spy>=0.4.2",

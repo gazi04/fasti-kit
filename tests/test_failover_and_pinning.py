@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.database import force_primary_var
+from core.factories.user_factory import UserModelFactory, make_email
 from user.models import UserModel
 from user.repositories.user_repository import UserRepository
 
@@ -30,10 +31,6 @@ def _reset_force_primary():
     token = force_primary_var.set(False)
     yield
     force_primary_var.reset(token)
-
-
-def _make_email() -> str:
-    return f"test_{uuid.uuid4().hex[:8]}@example.com"
 
 
 def _operational_error() -> OperationalError:
@@ -97,8 +94,8 @@ async def test_failover_declines_while_pending_write_is_unflushed(db) -> None:
     flag set. Rolling back to retry would expunge it, the retry would succeed,
     and the eventual commit would write nothing.
     """
-    email = _make_email()
-    db.add(UserModel(full_name="Pending Write", email=email, password_hash="pw"))
+    email = make_email()
+    db.add(UserModelFactory.build(email=email))
 
     assert force_primary_var.get() is False, "no flush yet, so no pin yet"
     assert db._can_fail_over() is False, "pending write must veto failover"
@@ -111,7 +108,7 @@ async def test_failover_declines_while_pending_write_is_unflushed(db) -> None:
 
 async def test_failover_declines_after_a_write_pinned_the_request(db) -> None:
     repo = UserRepository(db)
-    await repo.add("Already Written", _make_email(), "pw")
+    await repo.add("Already Written", make_email(), "pw")
 
     assert force_primary_var.get() is True
     assert db._can_fail_over() is False
@@ -126,8 +123,8 @@ async def test_failover_allowed_on_a_clean_read_only_session(db) -> None:
 
 async def test_pending_write_survives_a_replica_error(db, monkeypatch) -> None:
     """End to end: the write is still there after a failed read, not expunged."""
-    email = _make_email()
-    db.add(UserModel(full_name="Survivor", email=email, password_hash="pw"))
+    email = make_email()
+    db.add(UserModelFactory.build(email=email))
 
     real_scalar = AsyncSession.scalar
     attempts = {"n": 0}
@@ -160,7 +157,7 @@ async def test_pending_write_survives_a_replica_error(db, monkeypatch) -> None:
 async def test_orm_flush_pins_request_to_primary(db) -> None:
     """A unit-of-work flush calls get_bind() with clause=None, so only the
     before_flush listener can set the sticky flag."""
-    db.add(UserModel(full_name="Flush Pin", email=_make_email(), password_hash="pw"))
+    db.add(UserModelFactory.build())
     assert force_primary_var.get() is False
 
     await db.flush()

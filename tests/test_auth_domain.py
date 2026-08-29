@@ -14,19 +14,14 @@ from "inactive"/"unverified". Manual timing comparison:
         -d '{"email": "nobody@nowhere.invalid", "password": "x"}'
 """
 
-import uuid
-
 import pytest
 
 from auth.services.security_service import SecurityService
+from core.factories.user_factory import make_email
 from core.limiter import limiter
 from user.repositories.user_repository import UserRepository
 
 LOGIN_URL = "/api/v1/auth/login"
-
-
-def _make_email() -> str:
-    return f"test_{uuid.uuid4().hex[:8]}@example.com"
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +35,7 @@ def _disable_rate_limiting():
 
 async def test_login_rejects_nonexistent_user(client) -> None:
     response = await client.post(
-        LOGIN_URL, json={"email": _make_email(), "password": "whatever"}
+        LOGIN_URL, json={"email": make_email(), "password": "whatever"}
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid credentials"
@@ -48,7 +43,7 @@ async def test_login_rejects_nonexistent_user(client) -> None:
 
 async def test_login_rejects_wrong_password(client, db) -> None:
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     user = await repo.add(
         "Login Wrong Pw", email, SecurityService.hash_password("correct")
     )
@@ -61,7 +56,7 @@ async def test_login_rejects_wrong_password(client, db) -> None:
 
 async def test_login_rejects_unverified_user_with_correct_password(client, db) -> None:
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     await repo.add("Login Unverified", email, SecurityService.hash_password("correct"))
 
     response = await client.post(
@@ -73,7 +68,7 @@ async def test_login_rejects_unverified_user_with_correct_password(client, db) -
 
 async def test_login_rejects_inactive_user_with_correct_password(client, db) -> None:
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     user = await repo.add(
         "Login Inactive", email, SecurityService.hash_password("correct")
     )
@@ -89,7 +84,7 @@ async def test_login_rejects_inactive_user_with_correct_password(client, db) -> 
 
 async def test_login_succeeds_for_active_verified_user(client, db) -> None:
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     user = await repo.add(
         "Login Happy Path", email, SecurityService.hash_password("correct")
     )

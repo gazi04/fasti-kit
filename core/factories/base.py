@@ -16,5 +16,12 @@ class BasePydanticFactory(PydanticBaseFactory[PydanticModelT]):
 
 
 class BaseSQLAlchemyFactory(SQLAlchemyFactory[SQLAlchemyModelT]):
+    """Build model instances with `.build()` only.
+
+    `.create_sync()` / `.create_async()` open their own session and would
+    escape the transactional `db` fixture's savepoint — persist through a
+    repository or `db.add()` instead.
+    """
+
     __is_base_factory__ = True
-    __set_relationships__ = True
+    __set_relationships__ = False

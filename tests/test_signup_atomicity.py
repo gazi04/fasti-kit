@@ -7,11 +7,10 @@ unverified, with a NULL jti — and the caller's retry hit 409 with no route
 back except /resend-verification. Both writes now share one transaction.
 """
 
-import uuid
-
 import pytest
 from sqlalchemy import select
 
+from core.factories.user_factory import make_email
 from user.models import UserModel
 from user.repositories.user_repository import UserRepository
 
@@ -31,17 +30,13 @@ def _disable_rate_limit():
     limiter.enabled = previous
 
 
-def _make_email() -> str:
-    return f"test_{uuid.uuid4().hex[:8]}@example.com"
-
-
 async def _row_for(db, email: str) -> UserModel | None:
     return await db.scalar(select(UserModel).where(UserModel.email == email))
 
 
 async def test_create_user_persists_user_and_jti(client, db) -> None:
     """The happy path commits both writes."""
-    email = _make_email()
+    email = make_email()
 
     response = await client.post(
         CREATE_URL,
@@ -62,7 +57,7 @@ async def test_create_user_leaves_no_row_when_second_write_fails(
     client, db, monkeypatch
 ) -> None:
     """The whole signup rolls back — no half-created account."""
-    email = _make_email()
+    email = make_email()
 
     async def failing_update(self, id, auto_commit=True, **fields):
         raise RuntimeError("simulated failure stamping the verification jti")
@@ -87,7 +82,7 @@ async def test_create_user_can_be_retried_after_a_failure(
     client, db, monkeypatch
 ) -> None:
     """Because nothing persisted, the same email is still free."""
-    email = _make_email()
+    email = make_email()
 
     async def failing_update(self, id, auto_commit=True, **fields):
         raise RuntimeError("simulated failure")
@@ -112,7 +107,7 @@ async def test_create_user_can_be_retried_after_a_failure(
 
 async def test_duplicate_email_still_returns_409(client, db) -> None:
     """The savepoint flush must keep translating IntegrityError -> 409."""
-    email = _make_email()
+    email = make_email()
     await UserRepository(db).add("First", email, "pw")
 
     response = await client.post(
@@ -126,7 +121,7 @@ async def test_duplicate_email_leaves_the_session_usable(db) -> None:
     """_flush_or_raise uses a SAVEPOINT, so a rejected insert must not poison
     the caller's transaction the way the old rollback-on-IntegrityError did."""
     repo = UserRepository(db)
-    email = _make_email()
+    email = make_email()
     await repo.add("First", email, "pw")
 
     with pytest.raises(ValueError, match="Email taken"):
@@ -137,5 +132,5 @@ async def test_duplicate_email_leaves_the_session_usable(db) -> None:
     assert survivor is not None
     assert survivor.full_name == "First"
 
-    other = await repo.add("Unaffected", _make_email(), "pw")
+    other = await repo.add("Unaffected", make_email(), "pw")
     assert other.id is not None

@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from core.database import AsyncSessionLocal
 from core.mail import send_email
+from core.outbox.relay import cleanup_dispatched
 
 logger = logging.getLogger(__name__)
 
@@ -33,3 +34,11 @@ async def cleanup_revoked_tokens_task(ctx):
         await db.commit()
     logger.info("Successfully cleaned up expired tokens")
     return {"status": "completed"}
+
+
+async def cleanup_outbox_task(ctx):
+    logger.info("Starting background cleanup of dispatched outbox rows")
+    async with AsyncSessionLocal() as db:
+        deleted = await cleanup_dispatched(db)
+    logger.info("Deleted %d dispatched outbox rows past retention", deleted)
+    return {"status": "completed", "deleted": deleted}

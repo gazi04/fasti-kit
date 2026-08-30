@@ -1,12 +1,20 @@
+import asyncio
 import logging
+from contextlib import suppress
 
 from saq import CronJob
 
 from core.database import dispose_engines
+from core.outbox.relay import relay_loop
 from core.queue import task_queue
 from core.redis import close_redis
 
-from .tasks import cleanup_revoked_tokens_task, process_welcome_email, send_email_task
+from .tasks import (
+    cleanup_outbox_task,
+    cleanup_revoked_tokens_task,
+    process_welcome_email,
+    send_email_task,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,22 +23,29 @@ logging.basicConfig(
 )
 
 
-async def _release_pools(ctx) -> None:
-    """Drain the DB engine pools and the Redis client when the worker stops.
+async def _start_relay(ctx) -> None:
+    ctx["outbox_relay"] = asyncio.create_task(relay_loop())
 
-    The worker holds these because its tasks use AsyncSessionLocal / core.redis.
-    """
+
+async def _release_pools(ctx) -> None:
+    relay = ctx.get("outbox_relay")
+    if relay is not None:
+        relay.cancel()
+        with suppress(asyncio.CancelledError):
+            await relay
+
     await dispose_engines()
     await close_redis()
 
 
-# SAQ's Worker.__init__ folds every CronJob.function into its function registry
-# automatically, so cron-only tasks (cleanup_revoked_tokens_task) are intentionally
-# absent from "functions" — adding them there would just be a redundant duplicate.
 settings = {
     "queue": task_queue,
     "functions": [process_welcome_email, send_email_task],
-    "cron_jobs": [CronJob(cleanup_revoked_tokens_task, cron="0 3 * * *")],
+    "cron_jobs": [
+        CronJob(cleanup_revoked_tokens_task, cron="0 3 * * *"),
+        CronJob(cleanup_outbox_task, cron="30 3 * * *"),
+    ],
     "concurrency": 10,
+    "startup": _start_relay,
     "shutdown": _release_pools,
 }

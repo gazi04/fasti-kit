@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # before force-cancelling them.
     shutdown_timeout: int = 30
 
+    outbox_poll_interval: float = 5.0
+    outbox_batch_size: int = 100
+    outbox_max_attempts: int = 10
+    outbox_retention_days: int = 7
+
     database_replica_url: str | None = None
 
     @computed_field

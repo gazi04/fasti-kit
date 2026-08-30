@@ -6,4 +6,5 @@ same time keep a clean code.
 
 from auth.models import RevokedTokenModel  # noqa: F401
 from core.database import Base  # noqa: F401
+from core.outbox.model import OutboxEvent  # noqa: F401
 from user.models import UserModel  # noqa: F401

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import AsyncSessionLocal, force_primary_var
 from core.outbox.model import OutboxEvent
-from core.queue import task_queue
+from core.queue import enqueue_task
 from core.setting import get_settings
 
 logger = logging.getLogger(__name__)
@@ -38,9 +38,7 @@ async def dispatch_pending(db: AsyncSession, *, batch_size: int) -> tuple[int, i
     failed = 0
     for row in rows:
         try:
-            await task_queue.enqueue(
-                row.task_name, key=f"outbox:{row.id}", **row.payload
-            )
+            await enqueue_task(row.task_name, key=f"outbox:{row.id}", **row.payload)
             row.dispatched_at = datetime.now(UTC)
             dispatched += 1
         except Exception as err:

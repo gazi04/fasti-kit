@@ -10,6 +10,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from auth.errors import install_auth_error_handlers
 from core.api_versions import v1_router
 from core.database import dispose_engines
+from core.dead_letter.router import dlq_router
 from core.health import health_router
 from core.limiter import limiter
 from core.logging.setup import setup_logging
@@ -85,6 +86,7 @@ setup_openapi(app)
 add_pagination(app)
 
 app.include_router(health_router)
+app.include_router(dlq_router)
 app.include_router(v1_router)
 
 Instrumentator().instrument(app).expose(app)

@@ -1,11 +1,13 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from saq import Worker
 from sqlalchemy import delete, select
 
 from auth.models.revoked_token_model import RevokedTokenModel
 from core.database import AsyncSessionLocal
-from core.worker.tasks import cleanup_revoked_tokens_task
+from core.worker.main import settings
+from core.worker.tasks import cleanup_outbox_task, cleanup_revoked_tokens_task
 
 
 async def test_cleanup_revoked_tokens_task_deletes_only_expired_rows() -> None:
@@ -42,3 +44,22 @@ async def test_cleanup_revoked_tokens_task_deletes_only_expired_rows() -> None:
                 )
             )
             await db.commit()
+
+
+async def test_worker_settings_register_all_task_functions() -> None:
+    """Worker(**settings) builds a valid config: every task + cron function is registered
+    and every cron expression is valid (Worker.__init__ raises on a bad cron string)."""
+    worker = Worker(**settings)
+
+    assert set(worker.functions) >= {
+        "process_welcome_email",
+        "send_email_task",
+        "cleanup_revoked_tokens_task",
+        "cleanup_outbox_task",
+    }
+
+
+async def test_cleanup_outbox_task_runs_without_error() -> None:
+    result = await cleanup_outbox_task(ctx={})
+    assert result["status"] == "completed"
+    assert "deleted" in result

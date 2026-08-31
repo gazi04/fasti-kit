@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     outbox_max_attempts: int = 10
     outbox_retention_days: int = 7
 
+    dead_letter_retention_days: int = 30
+    task_max_retries: int = 3
+    task_retry_delay: float = 5.0
+    task_retry_backoff: bool = True
+
     database_replica_url: str | None = None
 
     @computed_field

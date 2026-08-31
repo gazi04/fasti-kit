@@ -30,11 +30,11 @@ def _disable_rate_limit():
 def recorded_enqueue(monkeypatch):
     calls: list[dict] = []
 
-    async def _fake_enqueue(task_name, **kwargs):
-        calls.append({"task_name": task_name, **kwargs})
+    async def _fake_enqueue(task_name, *, key, **kwargs):
+        calls.append({"task_name": task_name, "key": key, **kwargs})
         return None
 
-    monkeypatch.setattr(relay.task_queue, "enqueue", _fake_enqueue)
+    monkeypatch.setattr(relay, "enqueue_task", _fake_enqueue)
     return calls
 
 
@@ -89,10 +89,10 @@ async def test_dispatch_pending_enqueues_with_dedup_key_and_marks_dispatched(
 async def test_dispatch_pending_records_failure_without_marking_dispatched(
     db, monkeypatch
 ) -> None:
-    async def _boom(task_name, **kwargs):
+    async def _boom(task_name, *, key, **kwargs):
         raise RuntimeError("redis down")
 
-    monkeypatch.setattr(relay.task_queue, "enqueue", _boom)
+    monkeypatch.setattr(relay, "enqueue_task", _boom)
 
     row = await OutboxRepository(db).add("send_email_task", PAYLOAD)
     await db.commit()
@@ -108,10 +108,10 @@ async def test_dispatch_pending_records_failure_without_marking_dispatched(
 
 
 async def test_dispatch_pending_parks_row_after_max_attempts(db, monkeypatch) -> None:
-    async def _boom(task_name, **kwargs):
+    async def _boom(task_name, *, key, **kwargs):
         raise RuntimeError("still down")
 
-    monkeypatch.setattr(relay.task_queue, "enqueue", _boom)
+    monkeypatch.setattr(relay, "enqueue_task", _boom)
 
     row = await OutboxRepository(db).add("send_email_task", PAYLOAD)
     row.attempts = get_settings().outbox_max_attempts - 1

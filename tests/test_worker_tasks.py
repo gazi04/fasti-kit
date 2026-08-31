@@ -6,6 +6,7 @@ from sqlalchemy import delete, select
 
 from auth.models.revoked_token_model import RevokedTokenModel
 from core.database import AsyncSessionLocal
+from core.dead_letter.hook import record_dead_letter
 from core.worker.main import settings
 from core.worker.tasks import cleanup_outbox_task, cleanup_revoked_tokens_task
 
@@ -56,7 +57,9 @@ async def test_worker_settings_register_all_task_functions() -> None:
         "send_email_task",
         "cleanup_revoked_tokens_task",
         "cleanup_outbox_task",
+        "cleanup_dead_letter_task",
     }
+    assert settings["after_process"] is record_dead_letter
 
 
 async def test_cleanup_outbox_task_runs_without_error() -> None:

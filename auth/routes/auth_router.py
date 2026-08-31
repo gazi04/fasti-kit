@@ -5,7 +5,6 @@ import jwt
 from authx import TokenPayload
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Request,
@@ -34,6 +33,8 @@ from core.database import force_primary_var, get_db
 from core.deprecation import DeprecationRoute, deprecated
 from core.limiter import limiter
 from core.openapi import problem_responses
+from core.outbox.dependencies import get_outbox_repository
+from core.outbox.repository import OutboxRepository
 from user.dependencies import get_user_repository
 from user.repositories.user_repository import UserRepository
 
@@ -161,8 +162,9 @@ async def verify_email(
 async def resend_verification(
     data: ResendVerificationRequest,
     request: Request,
-    background_task: BackgroundTasks,
     user_repo: UserRepository = Depends(get_user_repository),
+    outbox_repo: OutboxRepository = Depends(get_outbox_repository),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     user = await user_repo.get_by_email(data.email)
 
@@ -170,10 +172,14 @@ async def resend_verification(
         token, pending_jti = EmailVerificationService.create_verification_token(
             str(user.id)
         )
-        await user_repo.update(user.id, pending_verification_jti=pending_jti)
-        background_task.add_task(
-            EmailVerificationService.send_verification_email, user.email, token
+        await user_repo.update(
+            user.id, pending_verification_jti=pending_jti, auto_commit=False
         )
+        await outbox_repo.add(
+            "send_email_task",
+            EmailVerificationService.build_email_payload(user.email, token),
+        )
+        await db.commit()
 
     return {
         "message": (
@@ -188,17 +194,22 @@ async def resend_verification(
 async def forgot_password(
     data: ForgotPasswordRequest,
     request: Request,
-    background_task: BackgroundTasks,
     user_repo: UserRepository = Depends(get_user_repository),
+    outbox_repo: OutboxRepository = Depends(get_outbox_repository),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     user = await user_repo.get_by_email(data.email)
 
     if user is not None and user.is_active:
         token, jti = PasswordResetService.create_reset_token(str(user.id))
-        await user_repo.update(user.id, pending_password_reset_jti=jti)
-        background_task.add_task(
-            PasswordResetService.send_reset_email, user.email, token
+        await user_repo.update(
+            user.id, pending_password_reset_jti=jti, auto_commit=False
         )
+        await outbox_repo.add(
+            "send_email_task",
+            PasswordResetService.build_email_payload(user.email, token),
+        )
+        await db.commit()
 
     return {
         "message": (

@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import jwt
 
-from core.queue import task_queue
 from core.setting import get_settings
 
 settings = get_settings()
@@ -30,15 +29,14 @@ class PasswordResetService:
         ), jti
 
     @staticmethod
-    async def send_reset_email(email: str, token: str) -> None:
+    def build_email_payload(email: str, token: str) -> dict[str, Any]:
         link = f"{settings.backend_url}/api/v1/auth/reset-password?token={token}"
         body = f'<p>Click to reset your password: <a href="{link}">{link}</a></p>'
-        await task_queue.enqueue(
-            "send_email_task",
-            subject="Reset your password",
-            recipients=[email],
-            body=body,
-        )
+        return {
+            "subject": "Reset your password",
+            "recipients": [email],
+            "body": body,
+        }
 
     @staticmethod
     async def decode_reset_token(token: str) -> dict[str, Any]:

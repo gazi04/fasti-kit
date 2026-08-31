@@ -3,7 +3,6 @@ from uuid import UUID
 from authx import TokenPayload
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Request,
@@ -18,6 +17,8 @@ from auth.services.token_service import TokenService
 from core.cache import invalidate_tags
 from core.database import get_db
 from core.limiter import limiter
+from core.outbox.dependencies import get_outbox_repository
+from core.outbox.repository import OutboxRepository
 from user.dependencies import get_current_user, get_user_repository, get_user_service
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
@@ -36,19 +37,11 @@ user_router = APIRouter(prefix="/user", tags=["User"])
 async def create_user(
     data: CreateUserRequest,
     request: Request,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: UserService = Depends(get_user_service),
+    outbox_repo: OutboxRepository = Depends(get_outbox_repository),
 ) -> User:
-    """Create the user and stamp its verification jti in a single transaction.
-
-    Both writes used to commit independently: if the jti update failed, the
-    account already existed unverified with a NULL jti, and the caller's retry
-    hit a 409 with no way back except /resend-verification. auto_commit=False
-    on both plus one caller-owned commit makes the signup all-or-nothing —
-    the same pattern verify_email, reset_password and delete_user use.
-    """
     try:
         user = await service.register(data, auto_commit=False)
     except ValueError as err:
@@ -58,6 +51,10 @@ async def create_user(
 
     try:
         await user_repo.update(user.id, pending_verification_jti=jti, auto_commit=False)
+        await outbox_repo.add(
+            "send_email_task",
+            EmailVerificationService.build_email_payload(user.email, token),
+        )
         await db.commit()
     except Exception as err:
         await db.rollback()
@@ -65,9 +62,6 @@ async def create_user(
             500, detail="Failed to schedule verification email"
         ) from err
 
-    background_tasks.add_task(
-        EmailVerificationService.send_verification_email, user.email, token
-    )
     return user
 
 

@@ -7,6 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.18.5",
     "fastapi>=0.138.2",
+    "starlette",  # imported directly by core/middlewares/* and core/problem.py
+    "prometheus-fastapi-instrumentator>=8.1.0",  # used in main.py (production)
     "psycopg2-binary>=2.9.12",
     "pydantic[email]>=2.13.4",
     "pydantic-settings>=2.14.2",
@@ -54,7 +56,6 @@ dev = [
     "import-linter>=2.13",
     "pip-audit>=2.10.1",
     "pre-commit>=4.6.1",
-    "prometheus-fastapi-instrumentator>=8.1.0",
     "py-spy>=0.4.2",
     "pyright>=1.1.411",
     "pytest>=9.1.1",
@@ -116,7 +117,18 @@ exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedE
 known_first_party = ["auth", "user", "core", "scripts"]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["psycopg2-binary", "uvloop", "httptools", "asyncpg"]  # used by drivers/uvicorn, not imported
+# Runtime-required but never imported by our own code:
+#   psycopg2-binary / uvloop / httptools / asyncpg — drivers loaded by SQLAlchemy / uvicorn
+#   sqlakeyset — fastapi-pagination's cursor backend, imported inside that library
+#   aiohttp — pulled in by the saq[web] extra
+DEP002 = [
+    "psycopg2-binary",
+    "uvloop",
+    "httptools",
+    "asyncpg",
+    "sqlakeyset",
+    "aiohttp",
+]
 
 [tool.importlinter]
 root_packages = ["auth", "user", "core", "scripts"]

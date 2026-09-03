@@ -30,6 +30,8 @@ dependencies = [
     "sqlakeyset>=2.0.1775222100",
     "rich>=15.0.0",
     "polyfactory>=3.3.0",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.32",
 ]
 
 [build-system]

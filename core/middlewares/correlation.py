@@ -49,7 +49,7 @@ class CorrelationIdMiddleware:
             response = problem_response(
                 request,
                 500,
-                detail="An internal server error occurred.",
+                detail="Internal server error",
                 title="Internal Server Error",
             )
             await response(scope, receive, send)

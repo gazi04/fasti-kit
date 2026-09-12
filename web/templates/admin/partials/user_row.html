@@ -1,0 +1,10 @@
+{% for u in users %}
+<tr class="border-b"><td class="py-2">{{ u.email }}</td><td>{{ u.full_name }}</td></tr>
+{% endfor %}
+{% if cursor %}
+<tr id="rows"><td colspan="2">
+  <button hx-get="/admin/users/rows?cursor={{ cursor }}"
+          hx-target="#rows" hx-swap="beforeend"
+          class="text-blue-600 py-2">Load more</button>
+</td></tr>
+{% endif %}

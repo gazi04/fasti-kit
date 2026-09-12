@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Users</h1>
+<table class="w-full text-sm"><tbody id="rows">
+  {% include "admin/partials/user_row.html" %}
+</tbody></table>
+{% endblock %}

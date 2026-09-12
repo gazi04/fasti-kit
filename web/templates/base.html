@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/alpine.min.js" defer></script>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <main class="max-w-5xl mx-auto p-6">{% block content %}{% endblock %}</main>
+  <script>
+    document.body.addEventListener('htmx:configRequest', (e) => {
+      const m = document.cookie.match(/(?:^|;\s*)csrf_access_token=([^;]+)/);
+      if (m) e.detail.headers['X-CSRF-TOKEN'] = decodeURIComponent(m[1]);
+    });
+  </script>
+</body>
+</html>

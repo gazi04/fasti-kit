@@ -133,7 +133,7 @@ DEP002 = [
 ]
 
 [tool.importlinter]
-root_packages = ["auth", "user", "core", "scripts"]
+root_packages = ["auth", "user", "core", "scripts", "web"]
 # Required: the "entities stay DB-agnostic" contract forbids external packages.
 # Without this, lint-imports raises ValueError before checking anything.
 include_external_packages = true
@@ -167,3 +167,17 @@ name = "auth never reaches user's HTTP layer, even transitively"
 type = "forbidden"
 source_modules = ["auth"]
 forbidden_modules = ["user.routes"]
+
+[[tool.importlinter.contracts]]
+name = "web is a presentation layer over domain services"
+type = "forbidden"
+source_modules = ["web"]
+forbidden_modules = ["user.models", "auth.repositories", "auth.models"]
+# web calls user.repositories the same way user.routes does (see
+# user_router.py's /list) — that's allowed, and it structurally chains into
+# user.models the same way auth -> user.repositories does below. web also
+# needs auth.dependencies (the AuthX instance) for its cookie-based admin
+# guard, which structurally chains into auth.repositories/auth.models via the
+# token-blocklist check. Direct-only by necessity, not laziness — same
+# reasoning as the auth contract above. Do not delete.
+allow_indirect_imports = true

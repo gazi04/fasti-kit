@@ -15,6 +15,8 @@ from scripts._boilerplate import (
 app = typer.Typer(help="Interactive DDD Scaffold Generator for fasti-kit")
 console = Console()
 
+RESERVED_DOMAINS = {"web", "core", "scripts", "tests", "alembic"}
+
 TYPE_MAPPING = {
     "str": {"py": "str", "sqla": "String", "pydantic": "str"},
     "int": {"py": "int", "sqla": "Integer", "pydantic": "int"},
@@ -125,6 +127,11 @@ def create_domain(
         console.print("[dim]Supported types: str, int, float, bool, uuid[/dim]")
         fields = Prompt.ask(
             "[bold blue]Enter fields[/bold blue] (e.g., title:str,price:float,is_active:bool=True)"
+        )
+
+    if domain in RESERVED_DOMAINS:
+        raise SystemExit(
+            f"'{domain}' is reserved — frontend code lives in web/, not a domain."
         )
 
     snake = to_snake_case(name)

@@ -123,6 +123,8 @@ known_first_party = ["auth", "user", "core", "scripts"]
 #   psycopg2-binary / uvloop / httptools / asyncpg — drivers loaded by SQLAlchemy / uvicorn
 #   sqlakeyset — fastapi-pagination's cursor backend, imported inside that library
 #   aiohttp — pulled in by the saq[web] extra
+#   jinja2 — used via fastapi.templating.Jinja2Templates, not imported directly
+#   python-multipart — required by starlette for Form/File parsing, not imported directly
 DEP002 = [
     "psycopg2-binary",
     "uvloop",
@@ -130,6 +132,8 @@ DEP002 = [
     "asyncpg",
     "sqlakeyset",
     "aiohttp",
+    "jinja2",
+    "python-multipart",
 ]
 
 [tool.importlinter]

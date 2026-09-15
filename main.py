@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi_pagination import add_pagination
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -27,6 +29,8 @@ from core.startup_checks import (
     check_jwt_config,
     check_mail_config,
 )
+from web.admin.dependencies import AdminRedirect
+from web.admin.router import admin_router
 
 settings = get_settings()
 setup_logging()
@@ -63,6 +67,12 @@ app.state.limiter = limiter
 install_problem_handlers(app)
 install_auth_error_handlers(app)
 
+
+@app.exception_handler(AdminRedirect)
+async def _admin_redirect_handler(request, exc: AdminRedirect) -> RedirectResponse:
+    return RedirectResponse("/admin/login", status_code=303)
+
+
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     SecurityHeadersMiddleware,
@@ -85,9 +95,12 @@ app.add_middleware(
 setup_openapi(app)
 add_pagination(app)
 
+app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
 app.include_router(health_router)
 app.include_router(dlq_router)
 app.include_router(v1_router)
+app.include_router(admin_router)
 
 Instrumentator().instrument(app).expose(app)
 

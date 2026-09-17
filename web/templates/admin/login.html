@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Admin Login</h1>
+{% if error %}<p class="text-red-600 mb-2">{{ error }}</p>{% endif %}
+<form method="post" action="/admin/login" class="space-y-3">
+  <input type="email" name="email" required class="border p-2 w-full" placeholder="Email">
+  <input type="password" name="password" required class="border p-2 w-full" placeholder="Password">
+  <button type="submit" class="bg-blue-600 text-white px-4 py-2">Log in</button>
+</form>
+{% endblock %}

@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import jwt
 from authx import TokenPayload
@@ -40,11 +40,6 @@ from user.repositories.user_repository import UserRepository
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"], route_class=DeprecationRoute)
 
-# Precomputed once at import time so a login for a nonexistent/inactive/
-# unverified account still pays the same bcrypt cost as a real password
-# check — otherwise response timing leaks account-state to an attacker.
-_DUMMY_PASSWORD_HASH = SecurityService.hash_password(uuid4().hex)
-
 
 @auth_router.post("/login", responses=problem_responses(401, 422, 500))
 @limiter.limit("5/minute")
@@ -54,13 +49,10 @@ async def login(
     response: Response,
     user_repository: UserRepository = Depends(get_user_repository),
 ) -> LoginResponse:
-    force_primary_var.set(True)
-    user = await user_repository.get_by_email(data.email)
-
-    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
-    password_ok = SecurityService.check_password(data.password, password_hash)
-
-    if user is None or not password_ok or not user.is_active or not user.is_verified:
+    user = await SecurityService.authenticate(
+        data.email, data.password, user_repository
+    )
+    if user is None:
         raise HTTPException(401, detail="Invalid credentials")
 
     token = auth.create_access_token(uid=str(user.id), scopes=user.scopes.split())

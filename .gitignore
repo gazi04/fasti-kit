@@ -13,6 +13,9 @@ wheels/
 
 # Local artifacts / tool caches
 cookies.txt
+# Generated API contract — see docs/typescript-types.md
+/openapi.json
+/openapi.d.ts
 .ruff_cache/
 .pytest_cache/
 .coverage
@@ -24,6 +27,10 @@ htmlcov/
 .obsidian/
 .idea/
 .vscode/
+
+# web/ build artifacts — see docs/jinja-htmx-setup.md
+web/static/app.css
+web/tailwindcss
 
 
 logs/

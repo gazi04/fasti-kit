@@ -13,7 +13,10 @@ from core.middlewares.security_headers import SecurityHeadersMiddleware
 EXPECTED_HEADERS = {
     "x-content-type-options": "nosniff",
     "referrer-policy": "strict-origin-when-cross-origin",
-    "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+    "content-security-policy": (
+        "default-src 'self'; form-action 'self'; base-uri 'self'; "
+        "object-src 'none'; frame-ancestors 'none'"
+    ),
     "x-frame-options": "DENY",
 }
 

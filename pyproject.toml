@@ -47,6 +47,9 @@ create-service = "scripts.create_service:main"
 create-schema = "scripts.create_schema:main"
 create-route = "scripts.create_route:main"
 create-all = "scripts.create_all:main"
+create-migration = "scripts.create_migration:main"
+create-factory = "scripts.create_factory:main"
+create-test = "scripts.create_test:main"
 seed = "scripts.seed:main"
 
 [dependency-groups]

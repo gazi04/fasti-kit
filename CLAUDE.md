@@ -41,6 +41,12 @@ uv run create-repository <domain> <name>
 uv run create-schema <domain> <name>
 uv run create-service <domain> <name>
 uv run create-route <domain> <name>
+uv run create-migration -m "message" [--domain <domain>] [--apply]  # alembic autogenerate, guarded: checks
+                                                                     # core/models.py registration first, lints the
+                                                                     # generated file for drop/nullable footguns
+uv run create-factory <domain> <name>       # polyfactory Create/Update request factories for a domain's schemas
+uv run create-test <domain> <name>          # repository+service tests via the db fixture, using create-factory's
+                                             # output; runs them immediately after writing
 
 # Quality gates (all configured in pyproject.toml; also wired as pre-commit hooks)
 uv run pyright                       # type checking
@@ -91,12 +97,18 @@ Startup runs `check_database`, `check_mail_config`, `check_jwt_config` (`core/st
 - **`core/database.py`** — `AsyncResilientRoutingSession` auto-routes `SELECT`s to `replica_engine` and writes to `primary_engine`, "stickies" a request to primary for the rest of its lifetime once any write happens (via the `force_primary_var` contextvar), and fails over reads to primary on a replica `OperationalError`. If a route needs read-after-write consistency before an actual write statement runs (e.g. login reading the row it's about to check), set `force_primary_var.set(True)` explicitly — see `auth_router.py`'s `/login`, `/refresh`, `/verify-email`.
 - **`core/problem.py`** / **`core/exception.py`** — `DomainException` (and subclasses `EntityNotFoundError`, `UnauthorizedActionError`, `ConflictError`) is the base for service/repository-layer errors; raise these rather than `HTTPException` below the route layer so they get RFC 7807 formatting for free.
 - **`core/cache.py`** — `@cache(ttl=..., tags=[...])` decorator for Redis cache-aside on functions with a return type annotation (required — used to build a `TypeAdapter` for serialization); `invalidate_tags(...)` wipes everything tagged.
-- **`core/queue.py`** / **`core/worker/`** — `task_queue` (saq/Redis) for background jobs; register new job functions in `core/worker/main.py`'s `functions` list.
+- **`core/queue.py`** / **`core/worker/`** — `task_queue` (saq/Redis) for background jobs; register new job functions in `core/worker/main.py`'s `functions` list. Enqueue through `enqueue_task(name, key=..., **kwargs)` rather than `task_queue.enqueue` directly — it applies the project retry policy (`task_max_retries` / `task_retry_delay` / `task_retry_backoff`), without which SAQ's `retries=1` default means a job never actually retries.
+- **`core/outbox/`** — transactional outbox. `OutboxRepository.add(task_name, payload)` (via `get_outbox_repository`) records a queued task as a row in the caller's DB transaction instead of enqueueing directly, so the side effect commits atomically with the business write. `relay_loop` (spawned in the SAQ worker's `startup` hook) polls `outbox_events` with `FOR UPDATE SKIP LOCKED`, forwards rows to `task_queue` with a deterministic `key=f"outbox:{id}"` for at-least-once delivery, and parks poison rows in `failed_at` after `outbox_max_attempts`. A daily `cleanup_outbox_task` cron purges dispatched rows past `outbox_retention_days`. Routes that need an email sent write an outbox row before their `db.commit()` rather than using `BackgroundTasks`.
+- **`core/dead_letter/`** — dead-letter queue for background jobs that exhaust their retries. `record_dead_letter` is wired as the SAQ worker's `after_process` hook; when a job's terminal status is `FAILED`/`ABORTED` it writes the function, kwargs, traceback and attempt count to `dead_letter_jobs`. The admin router (`dlq_router`, mounted at `/api/admin/tasks/dlq` in `main.py`, gated by `require_scopes("admin:read")`) lists / inspects / retries / purges rows; retry re-enqueues via `enqueue_task` with `key=f"dlq-retry:{id}"` and stamps `retried_at`. A daily `cleanup_dead_letter_task` cron purges retried rows past `dead_letter_retention_days`. Not captured: jobs aborted by SAQ's `sweep` (worker hard-killed mid-job).
 - **`core/limiter.py`** — `slowapi` `Limiter` backed by Redis; apply with `@limiter.limit("5/minute")` under the route decorator (see auth/user routers).
 - **`core/deprecation.py`** — `route_class=DeprecationRoute` + `@deprecated(sunset=...)` marks a route deprecated in OpenAPI and injects `Deprecation`/`Sunset` response headers (used on `auth_router`).
 - **`core/safety.py`** — `ensure_safe_operation(...)` guards destructive/dev-only CLI commands (e.g. `seed --reset`) from running against production without an explicit `--allow-production` flag; also warns on non-local DB hosts outside production.
 - **`core/models.py`** — manifest-only: imports `Base` and every domain's models so `Base.metadata` is fully populated for Alembic autogenerate and app startup. When adding a new domain with its own models, import it here too.
 - **`core/setting.py`** — `pydantic-settings` `Settings`, cached via `get_settings()`. `backend_url` gets an auto-prepended `http://` scheme if none is given.
+
+### `web/` — server-rendered admin UI
+
+`web/` is the server-rendered UI layer (Jinja2 + HTMX + Tailwind, see `docs/jinja-htmx-setup.md`), mounted at `/admin` — **not a DDD domain**. It imports domain `repositories`/`services`/`schemas` and returns HTML, not JSON; no `entities`/`models` of its own. `scripts/create_domain.py` refuses `web` as a domain name for this reason. `web/dependencies.py` holds the shared `Jinja2Templates` instance; `web/admin/dependencies.py`'s `admin_page_guard` reads the access token from a cookie (not the header-only `require_scopes` used by the JSON API) and redirects to `/admin/login` on failure — that login route doesn't exist yet, so the guard currently always redirects (see `docs/jinja-htmx-setup.md`'s "Not covered by this skeleton").
 
 ### Auth (`auth/`)
 

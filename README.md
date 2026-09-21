@@ -343,10 +343,3 @@ uv run deptry .                      # unused/missing dependency check
 uv run pip-audit                     # dependency vulnerability scan
 uv run pre-commit run --all-files    # all of the above, wired as pre-commit hooks
 ```
-
-## Docs
-
-Design and decision write-ups — including superseded decisions, kept with their
-reasoning intact — live in [`docs/`](docs/README.md), grouped by topic: architecture,
-authentication, authorization, pagination, versioning, seeding, safety, testing,
-tooling. Worth checking before re-deciding something that's already been settled.

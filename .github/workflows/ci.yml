@@ -16,7 +16,38 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fasti_kit
+      JWT_SECRET_KEY: ci-test-secret-key-not-for-production
+      JWT_ALGORITHM: HS256
+      ALLOWED_ORIGINS: '["http://localhost:3000"]'
+      MAIL_FROM: ci@example.com
+      MAIL_PORT: "1025"
+      MAIL_SERVER: localhost
+      MAIL_STARTTLS: "False"
+      MAIL_SSL_TLS: "False"
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fasti_kit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@v4
 
@@ -48,3 +79,19 @@ jobs:
       - name: deptry
         if: ${{ !cancelled() }}
         run: uv run deptry .
+
+      - name: Prepare test databases
+        if: ${{ !cancelled() }}
+        # tests/conftest.py's fixtures create their own schema in `fasti_kit_test`
+        # (fine, no migration needed there) but a handful of tests
+        # (test_worker_tasks.py, test_dead_letter.py, test_lifespan.py) go through
+        # AsyncSessionLocal() directly, hitting the plain `fasti_kit` DATABASE_URL
+        # for real — that database needs actual migrations applied, same as any
+        # dev environment gets from the README's `uv run alembic upgrade head`.
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE fasti_kit_test;"
+          uv run alembic upgrade head
+
+      - name: pytest
+        if: ${{ !cancelled() }}
+        run: uv run pytest --cov

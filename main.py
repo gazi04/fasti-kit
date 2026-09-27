@@ -30,6 +30,7 @@ from core.startup_checks import (
     check_mail_config,
 )
 from web.admin.dependencies import AdminRedirect
+from web.admin.errors import install_admin_error_handlers
 from web.admin.router import admin_router
 
 settings = get_settings()
@@ -66,6 +67,7 @@ app = FastAPI(title="Title", lifespan=lifespan)
 app.state.limiter = limiter
 install_problem_handlers(app)
 install_auth_error_handlers(app)
+install_admin_error_handlers(app)
 
 
 @app.exception_handler(AdminRedirect)

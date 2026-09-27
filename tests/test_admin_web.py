@@ -2,11 +2,28 @@ import pytest
 from httpx import AsyncClient
 
 from auth.services.security_service import SecurityService
+from core.exception import EntityNotFoundError
 from core.factories.user_factory import make_email
 from core.limiter import limiter
 from user.repositories.user_repository import UserRepository
 
 LOGIN_URL = "/admin/login"
+
+
+async def _login_as_admin(client: AsyncClient, db) -> None:
+    repo = UserRepository(db)
+    password = "correct-horse-battery-staple"
+    user = await repo.add(
+        full_name="Admin",
+        email=make_email(),
+        password_hash=SecurityService.hash_password(password),
+    )
+    await repo.update(user.id, is_verified=True, scopes="admin:read")
+
+    response = await client.post(
+        LOGIN_URL, data={"email": user.email, "password": password}
+    )
+    assert response.status_code == 303
 
 
 @pytest.fixture(autouse=True)
@@ -106,6 +123,43 @@ async def test_admin_login_rejects_unverified_user(client: AsyncClient, db) -> N
 
     assert response.status_code == 401
     assert "Invalid credentials" in response.text
+
+
+async def test_admin_users_renders_html_error_page_on_domain_exception(
+    client: AsyncClient, db, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _login_as_admin(client, db)
+
+    async def _raise_not_found(self, params=None):
+        raise EntityNotFoundError("User", "test")
+
+    monkeypatch.setattr(UserRepository, "list", _raise_not_found)
+
+    response = await client.get("/admin/users")
+
+    assert response.status_code == 404
+    assert "text/html" in response.headers["content-type"]
+    assert "User with identifier" in response.text
+    assert "was not found" in response.text
+
+
+async def test_admin_users_rows_renders_html_fragment_on_domain_exception(
+    client: AsyncClient, db, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _login_as_admin(client, db)
+
+    async def _raise_not_found(self, params=None):
+        raise EntityNotFoundError("User", "test")
+
+    monkeypatch.setattr(UserRepository, "list", _raise_not_found)
+
+    response = await client.get("/admin/users/rows", headers={"HX-Request": "true"})
+
+    assert response.status_code == 404
+    assert "text/html" in response.headers["content-type"]
+    assert "User with identifier" in response.text
+    assert "was not found" in response.text
+    assert "<html" not in response.text
 
 
 async def test_admin_login_rejects_verified_user_without_admin_scope(

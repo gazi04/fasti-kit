@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">{{ title }}</h1>
+<div class="rounded border border-red-300 bg-red-50 text-red-700 p-4 mb-4">{{ detail }}</div>
+<p class="text-sm text-gray-500 mb-4">Reference: {{ correlation_id }}</p>
+<a href="/admin/users" class="text-blue-600">Back to Users</a>
+{% endblock %}

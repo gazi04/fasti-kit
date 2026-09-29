@@ -1,5 +1,5 @@
 http://api.fasti.localhost {
-    reverse_proxy host.docker.internal:8000
+    reverse_proxy {$API_UPSTREAM:host.docker.internal:8000}
 }
 
 http://mail.fasti.localhost {

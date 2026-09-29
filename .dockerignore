@@ -52,3 +52,17 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Not needed in the image
+tests/
+docs/
+.github/
+.obsidian/
+.agents/
+.claude/
+logs/
+cookies.txt
+.ruff_cache/
+.pytest_cache/
+.grimp_cache/
+.import_linter_cache/

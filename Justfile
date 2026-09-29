@@ -33,3 +33,6 @@ seed:
 
 docker:
   docker-compose up -d
+
+docker-app:
+  docker-compose --profile app up -d --build

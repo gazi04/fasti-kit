@@ -66,3 +66,4 @@ cookies.txt
 .pytest_cache/
 .grimp_cache/
 .import_linter_cache/
+.devcontainer/

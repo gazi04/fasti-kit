@@ -1,0 +1,40 @@
+{
+  "name": "fasti-kit",
+  "dockerComposeFile": ["../docker-compose.yml", "docker-compose.yml"],
+  "service": "devcontainer",
+  "runServices": [
+    "devcontainer",
+    "postgres-primary",
+    "postgres-replica",
+    "redis",
+    "mailpit"
+  ],
+  "workspaceFolder": "/workspaces/fasti-kit",
+  "remoteUser": "vscode",
+  "initializeCommand": "test -f .env || cp .env.example .env",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [8000, "mailpit:8025"],
+  "portsAttributes": {
+    "8000": { "label": "API" },
+    "mailpit:8025": { "label": "Mailpit" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "ms-pyright.pyright",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["tests"],
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  }
+}

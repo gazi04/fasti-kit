@@ -34,3 +34,8 @@ repos:
         language: system
         files: \.(py|toml)$
         pass_filenames: false
+
+      - id: detect-secrets
+        name: detect-secrets
+        entry: uv run detect-secrets-hook --baseline .secrets.baseline
+        language: system

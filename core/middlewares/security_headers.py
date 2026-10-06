@@ -14,11 +14,6 @@ class SecurityHeadersMiddleware:
         self.headers: dict[str, str] = {
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "strict-origin-when-cross-origin",
-            # JSON API responses ignore CSP; the server-rendered `web/` admin
-            # UI is same-origin only (vendored htmx/alpine/tailwind, no CDN),
-            # so 'self' is enough — form-action/base-uri don't inherit from
-            # default-src, so they're listed explicitly rather than relying
-            # on the browser's unrestricted default for those two.
             "Content-Security-Policy": (
                 "default-src 'self'; form-action 'self'; base-uri 'self'; "
                 "object-src 'none'; frame-ancestors 'none'"

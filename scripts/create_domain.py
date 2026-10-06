@@ -15,7 +15,7 @@ from scripts._boilerplate import (
 app = typer.Typer(help="Interactive DDD Scaffold Generator for fasti-kit")
 console = Console()
 
-RESERVED_DOMAINS = {"web", "core", "scripts", "tests", "alembic"}
+RESERVED_DOMAINS = {"core", "scripts", "tests", "alembic"}
 
 TYPE_MAPPING = {
     "str": {"py": "str", "sqla": "String", "pydantic": "str"},
@@ -131,7 +131,7 @@ def create_domain(
 
     if domain in RESERVED_DOMAINS:
         raise SystemExit(
-            f"'{domain}' is reserved — frontend code lives in web/, not a domain."
+            f"'{domain}' is a reserved top-level package name, not a domain."
         )
 
     snake = to_snake_case(name)

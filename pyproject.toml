@@ -30,8 +30,6 @@ dependencies = [
     "sqlakeyset>=2.0.1775222100",
     "rich>=15.0.0",
     "polyfactory>=3.3.0",
-    "jinja2>=3.1.6",
-    "python-multipart>=0.0.32",
 ]
 
 [build-system]
@@ -127,8 +125,6 @@ known_first_party = ["auth", "user", "core", "scripts"]
 #   psycopg2-binary / uvloop / httptools / asyncpg — drivers loaded by SQLAlchemy / uvicorn
 #   sqlakeyset — fastapi-pagination's cursor backend, imported inside that library
 #   aiohttp — pulled in by the saq[web] extra
-#   jinja2 — used via fastapi.templating.Jinja2Templates, not imported directly
-#   python-multipart — required by starlette for Form/File parsing, not imported directly
 DEP002 = [
     "psycopg2-binary",
     "uvloop",
@@ -136,12 +132,10 @@ DEP002 = [
     "asyncpg",
     "sqlakeyset",
     "aiohttp",
-    "jinja2",
-    "python-multipart",
 ]
 
 [tool.importlinter]
-root_packages = ["auth", "user", "core", "scripts", "web"]
+root_packages = ["auth", "user", "core", "scripts"]
 # Required: the "entities stay DB-agnostic" contract forbids external packages.
 # Without this, lint-imports raises ValueError before checking anything.
 include_external_packages = true
@@ -175,17 +169,3 @@ name = "auth never reaches user's HTTP layer, even transitively"
 type = "forbidden"
 source_modules = ["auth"]
 forbidden_modules = ["user.routes"]
-
-[[tool.importlinter.contracts]]
-name = "web is a presentation layer over domain services"
-type = "forbidden"
-source_modules = ["web"]
-forbidden_modules = ["user.models", "auth.repositories", "auth.models"]
-# web calls user.repositories the same way user.routes does (see
-# user_router.py's /list) — that's allowed, and it structurally chains into
-# user.models the same way auth -> user.repositories does below. web also
-# needs auth.dependencies (the AuthX instance) for its cookie-based admin
-# guard, which structurally chains into auth.repositories/auth.models via the
-# token-blocklist check. Direct-only by necessity, not laziness — same
-# reasoning as the auth contract above. Do not delete.
-allow_indirect_imports = true

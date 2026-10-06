@@ -106,10 +106,6 @@ Startup runs `check_database`, `check_mail_config`, `check_jwt_config` (`core/st
 - **`core/models.py`** — manifest-only: imports `Base` and every domain's models so `Base.metadata` is fully populated for Alembic autogenerate and app startup. When adding a new domain with its own models, import it here too.
 - **`core/setting.py`** — `pydantic-settings` `Settings`, cached via `get_settings()`. `backend_url` gets an auto-prepended `http://` scheme if none is given.
 
-### `web/` — server-rendered admin UI
-
-`web/` is the server-rendered UI layer (Jinja2 + HTMX + Tailwind, see `docs/jinja-htmx-setup.md`), mounted at `/admin` — **not a DDD domain**. It imports domain `repositories`/`services`/`schemas` and returns HTML, not JSON; no `entities`/`models` of its own. `scripts/create_domain.py` refuses `web` as a domain name for this reason. `web/dependencies.py` holds the shared `Jinja2Templates` instance; `web/admin/dependencies.py`'s `admin_page_guard` reads the access token from a cookie (not the header-only `require_scopes` used by the JSON API) and redirects to `/admin/login` on failure — that login route doesn't exist yet, so the guard currently always redirects (see `docs/jinja-htmx-setup.md`'s "Not covered by this skeleton").
-
 ### Auth (`auth/`)
 
 Uses `authx` (`auth/dependencies.py` configures `AuthX` with `JWT_TOKEN_LOCATION=['headers', 'cookies']`, HS256, `JWT_COOKIE_CSRF_PROTECT=True`). Access tokens travel via `Authorization: Bearer` header; refresh tokens are set as an HTTP-only cookie via `auth.set_refresh_cookies`. `auth/routes/auth_router.py` covers `/login`, `/refresh`, `/logout`, `/verify-email`, `/resend-verification`, `/forgot-password`, `/reset-password`, plus `/protected` as a reference route for the `Depends(require_scopes(...))` pattern. `require_scopes(*scopes, all_required=True)` (`auth/dependencies.py`) wraps `auth.token_required` and checks `TokenPayload.has_scopes`; scopes are stored space-delimited on the user row and embedded into the access token at login/refresh.

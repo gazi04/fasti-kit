@@ -37,6 +37,3 @@ uv run pre-commit install
 
 uv tool install rust-just
 uv tool update-shell
-export PATH="$(uv tool dir --bin):$PATH"
-just tailwind-install
-just css

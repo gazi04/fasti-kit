@@ -23,8 +23,7 @@
       "extensions": [
         "ms-python.python",
         "charliermarsh.ruff",
-        "ms-pyright.pyright",
-        "bradlc.vscode-tailwindcss"
+        "ms-pyright.pyright"
       ],
       "settings": {
         "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",

@@ -28,9 +28,4 @@ htmlcov/
 .idea/
 .vscode/
 
-# web/ build artifacts — see docs/jinja-htmx-setup.md
-web/static/app.css
-web/tailwindcss
-
-
 logs/

@@ -87,9 +87,6 @@ stays coherent as it grows past the two example domains (`auth`, `user`) it ship
 - **JWT auth with scopes** — `authx`-based, access token via `Authorization: Bearer`,
   refresh token via HTTP-only cookie, route-level `require_scopes(...)` dependency,
   email verification and password reset flows, enumeration-safe login/reset responses.
-- **Server-rendered admin UI** — a small Jinja2 + HTMX + Tailwind app mounted at
-  `/admin`, built on top of the same domain services/repositories rather than a separate
-  API client.
 - **Observability** — Prometheus metrics via `prometheus-fastapi-instrumentator`,
   correlation IDs on every request/log line, structured logging, and a docker-compose
   stack with Grafana, Prometheus, Dozzle (log viewer), and Mailpit (SMTP catcher).
@@ -122,7 +119,6 @@ fasti-kit/
 │   ├── api_versions.py       # mounts each domain's router under /api/v1
 │   ├── models.py               # imports every domain's models (Alembic manifest)
 │   └── setting.py               # pydantic-settings, get_settings()
-├── web/                  # server-rendered admin UI (Jinja2 + HTMX), not a domain
 ├── scripts/               # the create-* CLI generators + seed/migration helpers
 ├── alembic/                # DB migrations
 ├── tests/                   # pytest, real Postgres, transactional rollback per test
@@ -249,7 +245,6 @@ docker compose up -d pgadmin prometheus grafana dozzle caddy
 | Service | URL |
 |---|---|
 | API | http://localhost:8000 |
-| Admin UI | http://localhost:8000/admin |
 | API docs (OpenAPI) | http://localhost:8000/docs |
 | Mailpit (catches outgoing mail) | http://localhost:8025 |
 | pgAdmin | http://localhost:8888 |
@@ -311,8 +306,6 @@ All domain routes are mounted under `/api/v1`.
 | PATCH | `/api/v1/user/update` | Update a user |
 | DELETE | `/api/v1/user/delete` | Delete a user |
 | GET | `/api/v1/user/list` | Cursor-paginated user list |
-| GET/POST | `/admin/login` | Admin UI login (cookie session) |
-| GET | `/admin/users` | Admin user list (server-rendered) |
 | GET | `/api/admin/tasks/dlq` | List dead-letter jobs (`admin:read` scope) |
 | POST | `/api/admin/tasks/dlq/{id}/retry` | Retry a dead-lettered job |
 

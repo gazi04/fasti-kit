@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Keeping this file in sync: use the `/refresh-claude-md` skill (`.claude/skills/refresh-claude-md/`) to re-audit it against current repo state — don't hand-patch it piecemeal when drift is found.
 
-Project skills in `.claude/skills/`: `/refresh-claude-md` (this file), `/scaffold-domain` (generate a new domain via the CLI, then wire it into `core/models.py`, `core/api_versions.py`, and the import-linter contracts — steps the scaffolding CLI doesn't do itself), `/check-all` (run pyright/ruff/lint-imports/deptry/pytest and report failures, no auto-fix), `/add-route` (route→service→repository wiring, auth/scopes, error-handling choice, rate limiting), `/write-repo-method` (entity conversion, replica routing, cursor pagination conventions), `/write-test` (transactional `db`/`client` fixture conventions, runs the test after writing it). Workflow skills (auto-trigger, not task-specific): `/plan-before-code` (investigate + state scope before editing on nontrivial work), `/debug-root-cause` (reproduce first, root cause before fix, watch primary/replica routing), `/validate-before-done` (don't claim done unverified — run check-all, actually run tests, exercise routes), `/commit-style` (this repo's gitmoji convention, atomic commits, never auto-commit).
+Project skills in `.claude/skills/`: `/refresh-claude-md` (this file), `/scaffold-domain` (generate a new domain via the CLI, which wires it in itself, then add the migration and verify), `/check-all` (run pyright/ruff/lint-imports/deptry/pytest and report failures, no auto-fix), `/add-route` (route→service→repository wiring, auth/scopes, error-handling choice, rate limiting), `/write-repo-method` (entity conversion, replica routing, cursor pagination conventions), `/write-test` (transactional `db`/`client` fixture conventions, runs the test after writing it). Workflow skills (auto-trigger, not task-specific): `/plan-before-code` (investigate + state scope before editing on nontrivial work), `/debug-root-cause` (reproduce first, root cause before fix, watch primary/replica routing), `/validate-before-done` (don't claim done unverified — run check-all, actually run tests, exercise routes), `/commit-style` (this repo's gitmoji convention, atomic commits, never auto-commit).
 
 ## Commands
 
@@ -33,20 +33,23 @@ uv run alembic revision --autogenerate -m "message"     # new migration
 uv run seed
 
 # Scaffolding a new domain (see Architecture below)
-uv run create-domain <name>                 # empty routes/schemas/entities/models/repositories/services dirs
-uv run create-all <domain> <name>           # generates entity+model+repository+schema+service+route for <name> inside <domain>
-uv run create-entity <domain> <name>        # or generate a single layer individually
-uv run create-model <domain> <name>
-uv run create-repository <domain> <name>
-uv run create-schema <domain> <name>
-uv run create-service <domain> <name>
-uv run create-route <domain> <name>
+# Every create-* command takes -d/--domain, -n/--name, -f/--fields flags (no positional args)
+# and prompts for any that are missing.
+uv run create-domain -d <domain>            # 6 layer packages + empty dependencies.py, wired into pyproject.toml
+uv run create-all -d <domain> -n <name> -f "title:str,price:float"
+                                             # every layer + Depends() factories, model registered in
+                                             # core/models.py, router mounted in core/api_versions.py, ruff run
+uv run create-entity -d <domain> -n <name>  # or one layer at a time: create-{entity,model,repository,schema,
+                                             # service,route,dependencies}; refuses a domain that doesn't exist
 uv run create-migration -m "message" [--domain <domain>] [--apply]  # alembic autogenerate, guarded: checks
                                                                      # core/models.py registration first, lints the
                                                                      # generated file for drop/nullable footguns
-uv run create-factory <domain> <name>       # polyfactory Create/Update request factories for a domain's schemas
-uv run create-test <domain> <name>          # repository+service tests via the db fixture, using create-factory's
-                                             # output; runs them immediately after writing
+uv run create-factory -d <domain> -n <name>  # polyfactory Create/Update request factories for a domain's schemas
+uv run create-test -d <domain> -n <name>    # repository/service/route tests via the db/client fixtures, using
+                                             # create-factory's output; runs them and exits non-zero on failure
+just scaffold-smoke                          # scripts/smoke_scaffold.sh (also in CI): generate a domain in a temp
+                                             # copy, check it boots + passes every gate + its generated tests,
+                                             # and that a second create-all changes nothing
 
 # Quality gates (all configured in pyproject.toml; also wired as pre-commit hooks)
 uv run pyright                       # type checking
@@ -84,7 +87,7 @@ Layers are called through each other in one direction: route → service → rep
 
 This layering is not just convention — `pyproject.toml`'s `[tool.importlinter]` contracts enforce it via `uv run lint-imports` (also a pre-commit hook): a one-way `routes → services → repositories → models` layer contract per domain, entities forbidden from importing `sqlalchemy`/`fastapi`/`pydantic`, and `auth` forbidden from importing `user.routes`/`user.services`/`user.models` (it may go through `user.repositories`, since `auth` reads user data via `UserRepository` rather than owning its own user storage).
 
-**Scaffolding CLI (`scripts/`)** — `scripts/_boilerplate.py` has the shared helpers (case conversion, `write_new_file` which skips existing files rather than overwriting, `update_init` which merges new symbols into a domain layer's `__init__.py` non-destructively). Each `create_<layer>.py` is a small argparse script with a hardcoded string template for that layer, registered as a `uv run create-*` console script in `pyproject.toml`'s `[project.scripts]`. `create_all.py` just calls the other five in sequence plus route. New domains start via `create-domain`, which only makes the empty directory skeleton; populating a domain's layers is a separate step via `create-all`/`create-<layer>`.
+**Scaffolding CLI (`scripts/`)** — one generator path. Each `create_<layer>.py` has a pure `generate_<layer>(domain, name, fields)` function that holds the template and returns the paths it touched, plus a thin typer `create_<layer>` wrapper (prompts, validation, `ruff` via `format_paths`) registered as a `uv run create-*` console script in `pyproject.toml`'s `[project.scripts]`. Orchestrators (`create_all`, `create_test`) call only the pure functions — calling a typer-decorated function directly hands it `OptionInfo` defaults, which is what broke `create-all` before. `scripts/_boilerplate.py` holds the shared helpers: case conversion and name validation (lowercase identifiers only; `RESERVED_DOMAINS` = `alembic`, `core`, `docs`, `main`, `scripts`, `tests`), `write_new_file` (skips existing files), an `ast`-based `update_init`/`merge_imports`, and the idempotent wiring helpers `register_pyproject` (adds the domain to all seven pyproject lists that name domains, verified with `tomllib`, never touching the auth-only contracts), `register_model` and `register_router`. Domains stay namespace packages (no top-level `__init__.py`, like `auth`/`user`/`core`). Generated code follows the repo's conventions: repositories pin `force_primary_var` on writes, take `auto_commit`, use the `_flush_or_raise` savepoint and expose a cursor-paginated `list`; routes get the service from `<domain>/dependencies.py` and require an access token on create/update/delete. Covered by `tests/test_scaffolding.py` (incl. a check that every console script resolves) and `scripts/smoke_scaffold.sh`.
 
 ### Request pipeline (`main.py`)
 

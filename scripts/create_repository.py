@@ -1,51 +1,26 @@
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.prompt import Prompt
 
 from scripts._boilerplate import (
+    ask_domain,
+    ask_fields,
+    ask_name,
+    cli_errors,
+    console,
+    format_paths,
     parse_fields,
-    to_pascal_case,
-    to_snake_case,
+    require_domain,
+    resolve_names,
     update_init,
     write_new_file,
 )
 
-console = Console()
 
-
-def create_repository(
-    domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
-    name: str = typer.Option(None, "--name", "-n", help="Entity/Repository name"),
-    fields: str = typer.Option(
-        None, "--fields", "-f", help="Fields: name:str,price:float"
-    ),
-) -> None:
-    """Scaffold a new repository interactively or via CLI flags."""
-
-    # 1. Interactive Prompts
-    if not domain:
-        domain = Prompt.ask(
-            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
-        )
-    if not name:
-        name = Prompt.ask(
-            "[bold blue]Enter repository name[/bold blue] (e.g., product)"
-        )
-    if fields is None:
-        console.print("[dim]Supported types: str, int, float, bool, uuid[/dim]")
-        fields = Prompt.ask(
-            "[bold blue]Enter fields[/bold blue] (e.g., title:str,price:float) or leave blank",
-            default="",
-        )
-
-    # 2. Setup Variables
-    snake = to_snake_case(name)
-    pascal = to_pascal_case(name)
+def generate_repository(domain: str, name: str, fields: str = "") -> list[Path]:
+    snake, pascal = resolve_names(domain, name)
     parsed_fields = parse_fields(fields)
 
-    # 3. Format Field Expressions
     if parsed_fields:
         add_params = ", ".join([f"{f['name']}: {f['py_type']}" for f in parsed_fields])
         add_signature = f"self, {add_params}, auto_commit: bool = True"
@@ -62,14 +37,17 @@ def create_repository(
         model_instantiation = f"{pascal}Model(**fields)"
         to_entity_fields = "# TODO: map domain-specific fields here (e.g. name=model.name)\n            "
 
-    # 4. Generate Content
+    uuid_import = (
+        "import uuid\n" if any(f["type"] == "uuid" for f in parsed_fields) else ""
+    )
+
     layer_dir = Path(domain) / "repositories"
     file_path = layer_dir / f"{snake}_repository.py"
 
-    template = f"""import uuid
-from typing import Optional
-from uuid import UUID
+    template = f"""{uuid_import}from uuid import UUID
 
+from fastapi_pagination.cursor import CursorPage, CursorParams
+from fastapi_pagination.ext.sqlalchemy import apaginate
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,7 +73,7 @@ class {pascal}Repository:
 
         return self._to_entity(model)
 
-    async def get(self, id: UUID) -> Optional[{pascal}]:
+    async def get(self, id: UUID) -> {pascal} | None:
         result = await self.db.scalar(select({pascal}Model).where({pascal}Model.id == id))
 
         if result is None:
@@ -105,7 +83,7 @@ class {pascal}Repository:
 
     async def update(
         self, id: UUID, auto_commit: bool = True, **fields
-    ) -> Optional[{pascal}]:
+    ) -> {pascal} | None:
         force_primary_var.set(True)
         record = await self.db.get({pascal}Model, id)
 
@@ -124,7 +102,7 @@ class {pascal}Repository:
 
         return self._to_entity(record)
 
-    async def delete(self, id: UUID, auto_commit: bool = True) -> Optional[{pascal}]:
+    async def delete(self, id: UUID, auto_commit: bool = True) -> {pascal} | None:
         force_primary_var.set(True)
         record = await self.db.get({pascal}Model, id)
 
@@ -143,7 +121,7 @@ class {pascal}Repository:
 
     async def force_delete(
         self, id: UUID, auto_commit: bool = True
-    ) -> Optional[{pascal}]:
+    ) -> {pascal} | None:
         force_primary_var.set(True)
         record = await self.db.get({pascal}Model, id)
 
@@ -160,13 +138,23 @@ class {pascal}Repository:
 
         return result
 
-    async def _flush_or_raise(self, model: Optional[{pascal}Model] = None) -> None:
+    async def list(self, params: CursorParams | None = None) -> CursorPage[{pascal}]:
+        return await apaginate(
+            self.db,
+            select({pascal}Model).order_by(
+                {pascal}Model.created_at.desc(), {pascal}Model.id.desc()
+            ),
+            params=params or CursorParams(),
+            transformer=lambda models: [self._to_entity(model) for model in models],
+        )
+
+    async def _flush_or_raise(self, model: {pascal}Model | None = None) -> None:
         \"\"\"Flush inside a SAVEPOINT so a constraint violation stays contained.
 
-        `model` is added *inside* the savepoint on purpose — adding it beforehand
+        `model` is added *inside* the savepoint on purpose. Adding it beforehand
         would put it in the outer SessionTransaction, so a flush failure inside
-        the savepoint would deactivate the outer transaction too (PendingRollbackError
-        on every later statement), defeating the point of the savepoint.
+        the savepoint would deactivate the outer transaction too
+        (PendingRollbackError on every later statement).
         \"\"\"
         try:
             async with self.db.begin_nested():
@@ -188,14 +176,36 @@ class {pascal}Repository:
         )
 """
 
-    # 5. Write File & Update __init__.py
     write_new_file(file_path, template)
-    update_init(
+    init = update_init(
         layer_dir / "__init__.py", f"{snake}_repository", [f"{pascal}Repository"]
     )
+    return [file_path, init]
 
+
+def create_repository(
+    domain: str | None = typer.Option(
+        None, "--domain", "-d", help="Target domain folder"
+    ),
+    name: str | None = typer.Option(
+        None, "--name", "-n", help="Entity/Repository name"
+    ),
+    fields: str | None = typer.Option(
+        None, "--fields", "-f", help="Fields: name:str,price:float"
+    ),
+) -> None:
+    """Scaffold a new repository interactively or via CLI flags."""
+    domain = ask_domain(domain)
+    name = ask_name(name, "repository")
+    fields = ask_fields(fields)
+
+    with cli_errors():
+        require_domain(domain)
+        paths = generate_repository(domain, name, fields)
+
+    format_paths(paths)
     console.print(
-        f"[bold green]✨ Created repository {pascal}Repository at {file_path}[/bold green]"
+        f"[bold green]✨ Repository for {name} is ready in {domain}/repositories[/bold green]"
     )
 
 

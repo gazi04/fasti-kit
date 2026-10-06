@@ -1,46 +1,29 @@
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.prompt import Prompt
 
 from scripts._boilerplate import (
-    to_pascal_case,
-    to_snake_case,
+    ask_domain,
+    ask_name,
+    cli_errors,
+    console,
+    format_paths,
+    require_domain,
+    resolve_names,
     update_init,
     write_new_file,
 )
 
-console = Console()
 
+def generate_service(domain: str, name: str, fields: str = "") -> list[Path]:
+    snake, pascal = resolve_names(domain, name)
 
-def create_service(
-    domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
-    name: str = typer.Option(None, "--name", "-n", help="Entity/Service name"),
-    fields: str = typer.Option(
-        None, "--fields", "-f", help="Ignored for services, kept for CLI consistency"
-    ),
-) -> None:
-    """Scaffold a new service interactively or via CLI flags."""
-
-    # 1. Interactive Prompts
-    if not domain:
-        domain = Prompt.ask(
-            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
-        )
-    if not name:
-        name = Prompt.ask("[bold blue]Enter service name[/bold blue] (e.g., product)")
-
-    # 2. Setup Variables
-    snake = to_snake_case(name)
-    pascal = to_pascal_case(name)
-
-    # 3. Generate Content
     layer_dir = Path(domain) / "services"
     file_path = layer_dir / f"{snake}_service.py"
 
-    template = f"""from typing import Optional
-from uuid import UUID
+    template = f"""from uuid import UUID
+
+from fastapi_pagination.cursor import CursorPage, CursorParams
 
 from {domain}.entities.{snake} import {pascal}
 from {domain}.repositories.{snake}_repository import {pascal}Repository
@@ -56,27 +39,51 @@ class {pascal}Service:
     ) -> {pascal}:
         return await self.repo.add(**data.model_dump(), auto_commit=auto_commit)
 
-    async def get(self, id: UUID) -> Optional[{pascal}]:
+    async def get(self, id: UUID) -> {pascal} | None:
         return await self.repo.get(id)
 
-    async def update(self, id: UUID, data: Update{pascal}Request) -> Optional[{pascal}]:
+    async def update(self, id: UUID, data: Update{pascal}Request) -> {pascal} | None:
         return await self.repo.update(id=id, **data.model_dump(exclude_unset=True))
 
     async def delete(
         self, id: UUID, force: bool = False, auto_commit: bool = True
-    ) -> Optional[{pascal}]:
+    ) -> {pascal} | None:
         if force:
             return await self.repo.force_delete(id, auto_commit=auto_commit)
 
         return await self.repo.delete(id, auto_commit=auto_commit)
+
+    async def list(self, params: CursorParams | None = None) -> CursorPage[{pascal}]:
+        return await self.repo.list(params)
 """
 
-    # 4. Write File & Update __init__.py
     write_new_file(file_path, template)
-    update_init(layer_dir / "__init__.py", f"{snake}_service", [f"{pascal}Service"])
+    init = update_init(
+        layer_dir / "__init__.py", f"{snake}_service", [f"{pascal}Service"]
+    )
+    return [file_path, init]
 
+
+def create_service(
+    domain: str | None = typer.Option(
+        None, "--domain", "-d", help="Target domain folder"
+    ),
+    name: str | None = typer.Option(None, "--name", "-n", help="Entity/Service name"),
+    fields: str | None = typer.Option(
+        None, "--fields", "-f", help="Ignored for services, kept for CLI consistency"
+    ),
+) -> None:
+    """Scaffold a new service interactively or via CLI flags."""
+    domain = ask_domain(domain)
+    name = ask_name(name, "service")
+
+    with cli_errors():
+        require_domain(domain)
+        paths = generate_service(domain, name)
+
+    format_paths(paths)
     console.print(
-        f"[bold green]✨ Created service {pascal}Service at {file_path}[/bold green]"
+        f"[bold green]✨ Service for {name} is ready in {domain}/services[/bold green]"
     )
 
 

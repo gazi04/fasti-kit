@@ -21,6 +21,9 @@ format path=".":
 test:
   uv run python -m pytest --cov
 
+scaffold-smoke:
+  ./scripts/smoke_scaffold.sh
+
 pre-commit:
   uv run pre-commit run --all-files
 

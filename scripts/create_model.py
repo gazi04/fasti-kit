@@ -1,51 +1,30 @@
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.prompt import Prompt
 
 from scripts._boilerplate import (
+    ask_domain,
+    ask_fields,
+    ask_name,
+    cli_errors,
+    console,
+    format_paths,
     parse_fields,
     pluralize,
-    to_pascal_case,
-    to_snake_case,
+    require_domain,
+    resolve_names,
     update_init,
     write_new_file,
 )
 
-console = Console()
+_BASE_COLUMN_TYPES = {"Boolean", "DateTime"}
 
 
-def create_model(
-    domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
-    name: str = typer.Option(None, "--name", "-n", help="Entity/Model name"),
-    fields: str = typer.Option(
-        None, "--fields", "-f", help="Fields: name:str,price:float"
-    ),
-) -> None:
-    """Scaffold a new ORM model interactively or via CLI flags."""
-
-    # 1. Interactive Prompts
-    if not domain:
-        domain = Prompt.ask(
-            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
-        )
-    if not name:
-        name = Prompt.ask("[bold blue]Enter model name[/bold blue] (e.g., product)")
-    if fields is None:
-        console.print("[dim]Supported types: str, int, float, bool, uuid[/dim]")
-        fields = Prompt.ask(
-            "[bold blue]Enter fields[/bold blue] (e.g., title:str,price:float) or leave blank",
-            default="",
-        )
-
-    # 2. Setup Variables
-    snake = to_snake_case(name)
-    pascal = to_pascal_case(name)
+def generate_model(domain: str, name: str, fields: str = "") -> list[Path]:
+    snake, pascal = resolve_names(domain, name)
     table_name = pluralize(snake)
     parsed_fields = parse_fields(fields)
 
-    # 3. Format Fields String
     model_fields = "\n    ".join(
         [
             f"{f['name']}: Mapped[{f['py_type']}] = mapped_column({f['sqla_type']}"
@@ -54,16 +33,19 @@ def create_model(
         ]
     )
     if not model_fields:
-        model_fields = "# TODO: add domain-specific columns here (e.g. name: Mapped[str] = mapped_column(String(255)))"
+        model_fields = "# TODO: add domain-specific columns here"
 
-    # 4. Generate Content
+    column_types = _BASE_COLUMN_TYPES | {
+        f["sqla_type"] for f in parsed_fields if f["type"] != "uuid"
+    }
+
     layer_dir = Path(domain) / "models"
     file_path = layer_dir / f"{snake}_model.py"
 
     template = f"""import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, String, Integer, Float
+from sqlalchemy import {", ".join(sorted(column_types))}
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -79,27 +61,46 @@ class {pascal}Model(Base):
     {model_fields}
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 """
 
-    # 5. Write Files & Update __init__.py
     write_new_file(file_path, template)
-    update_init(layer_dir / "__init__.py", f"{snake}_model", [f"{pascal}Model"])
+    init = update_init(layer_dir / "__init__.py", f"{snake}_model", [f"{pascal}Model"])
+    return [file_path, init]
 
+
+def create_model(
+    domain: str | None = typer.Option(
+        None, "--domain", "-d", help="Target domain folder"
+    ),
+    name: str | None = typer.Option(None, "--name", "-n", help="Entity/Model name"),
+    fields: str | None = typer.Option(
+        None, "--fields", "-f", help="Fields: name:str,price:float"
+    ),
+) -> None:
+    """Scaffold a new ORM model interactively or via CLI flags."""
+    domain = ask_domain(domain)
+    name = ask_name(name, "model")
+    fields = ask_fields(fields)
+
+    with cli_errors():
+        require_domain(domain)
+        paths = generate_model(domain, name, fields)
+
+    format_paths(paths)
     console.print(
-        f"[bold green]✨ Created model {pascal}Model at {file_path}[/bold green]"
+        f"[bold green]✨ Model for {name} is ready in {domain}/models[/bold green]"
     )
     console.print(
-        f"\n[yellow]Reminder:[/yellow] register the new model for Alembic/metadata discovery - "
-        f"add this line to [bold]core/models.py[/bold]:\n"
-        f"    [cyan]from {domain}.models import {pascal}Model[/cyan]"
+        "[yellow]Reminder:[/yellow] `create-all` registers models in "
+        "core/models.py for you; on its own, add the import there yourself."
     )
 
 

@@ -1,38 +1,22 @@
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.prompt import Prompt
 
-from scripts._boilerplate import to_pascal_case, to_snake_case, write_new_file
+from scripts._boilerplate import (
+    ask_domain,
+    ask_name,
+    cli_errors,
+    console,
+    format_paths,
+    resolve_names,
+    write_new_file,
+)
 
-console = Console()
 
+def generate_factory(domain: str, name: str) -> list[Path]:
+    snake, pascal = resolve_names(domain, name)
 
-def create_factory(
-    domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
-    name: str = typer.Option(None, "--name", "-n", help="Entity/Factory name"),
-    fields: str = typer.Option(
-        None, "--fields", "-f", help="Ignored for factories, kept for CLI consistency"
-    ),
-) -> None:
-    """Scaffold polyfactory request factories for a domain's schemas."""
-
-    # 1. Interactive Prompts
-    if not domain:
-        domain = Prompt.ask(
-            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
-        )
-    if not name:
-        name = Prompt.ask("[bold blue]Enter factory name[/bold blue] (e.g., product)")
-
-    # 2. Setup Variables
-    snake = to_snake_case(name)
-    pascal = to_pascal_case(name)
-
-    # 3. Generate Content
-    layer_dir = Path("core") / "factories"
-    file_path = layer_dir / f"{snake}_factory.py"
+    file_path = Path("core") / "factories" / f"{snake}_factory.py"
 
     template = f"""from core.factories.base import BasePydanticFactory
 from {domain}.schemas.{snake}_schema import Create{pascal}Request, Update{pascal}Request
@@ -45,15 +29,32 @@ class Create{pascal}RequestFactory(BasePydanticFactory[Create{pascal}Request]):
 
 class Update{pascal}RequestFactory(BasePydanticFactory[Update{pascal}Request]):
     __model__ = Update{pascal}Request
-    __use_defaults__ = True
+    __allow_none_optionals__ = False
 """
 
-    # 4. Write File (core/factories has no __init__.py re-exports to update)
     write_new_file(file_path, template)
+    return [file_path]
 
+
+def create_factory(
+    domain: str | None = typer.Option(
+        None, "--domain", "-d", help="Target domain folder"
+    ),
+    name: str | None = typer.Option(None, "--name", "-n", help="Entity/Factory name"),
+    fields: str | None = typer.Option(
+        None, "--fields", "-f", help="Ignored for factories, kept for CLI consistency"
+    ),
+) -> None:
+    """Scaffold polyfactory request factories for a domain's schemas."""
+    domain = ask_domain(domain)
+    name = ask_name(name, "factory")
+
+    with cli_errors():
+        paths = generate_factory(domain, name)
+
+    format_paths(paths)
     console.print(
-        f"[bold green]✨ Created factory Create{pascal}RequestFactory/"
-        f"Update{pascal}RequestFactory at {file_path}[/bold green]"
+        f"[bold green]✨ Factories for {name} are ready in core/factories[/bold green]"
     )
 
 

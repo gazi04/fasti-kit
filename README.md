@@ -255,22 +255,27 @@ docker compose up -d pgadmin prometheus grafana dozzle caddy
 ## Scaffolding a new domain
 
 ```bash
-uv run create-domain billing              # empty routes/schemas/entities/models/repositories/services dirs
-uv run create-all billing invoice         # entity + model + repository + schema + service + route, all at once
-# — or generate a single layer:
-uv run create-entity billing invoice
-uv run create-model billing invoice
-uv run create-repository billing invoice
-uv run create-schema billing invoice
-uv run create-service billing invoice
-uv run create-route billing invoice
+uv run create-domain -d billing                                    # layer packages + pyproject.toml wiring
+uv run create-all -d billing -n invoice -f "number:str,total:float" # every layer for one entity, wired into the app
 ```
 
-`create-domain` only creates the empty folder skeleton. After scaffolding, a new domain
-still needs to be wired in by hand: imported into `core/models.py` (so Alembic and
-startup see its tables), mounted in `core/api_versions.py`, and added to the
-`import-linter` contracts in `pyproject.toml`. Migrations, once a domain has models,
-are generated the same guarded way:
+`create-domain` creates the six layer packages and an empty `dependencies.py`, and adds
+the domain to every `pyproject.toml` list that names the domains (import-linter
+contracts, ruff, deptry, coverage, packaging). `create-all` then generates the entity,
+model, repository, schema, service and route, adds the `Depends()` factories to
+`dependencies.py`, imports the model in `core/models.py`, mounts the router in
+`core/api_versions.py`, and runs ruff over everything it touched. Run either command
+again and it changes nothing. Leave out a flag and the command asks for it.
+
+Generated routes follow the `user` domain's shape: `/create`, `/get/{id}`, `/update/{id}`,
+`/delete/{id}` and a cursor-paginated `/list`. Create, update and delete require an
+access token.
+
+Each layer also has its own command, for adding one piece to an existing domain:
+`create-entity`, `create-model`, `create-repository`, `create-schema`, `create-service`,
+`create-route` and `create-dependencies`, all taking the same `-d/-n/-f` flags.
+
+Migrations, once a domain has models, are generated the same guarded way:
 
 ```bash
 uv run create-migration -m "add invoices table" --domain billing --apply
@@ -283,9 +288,13 @@ non-nullable columns) before applying it.
 For test scaffolding:
 
 ```bash
-uv run create-factory billing invoice    # polyfactory Create/Update request factories
-uv run create-test billing invoice       # repository+service tests, run immediately after writing
+uv run create-factory -d billing -n invoice   # polyfactory Create/Update request factories
+uv run create-test -d billing -n invoice      # repository, service and route tests, run right away
 ```
+
+`just scaffold-smoke` (also run in CI) generates a throwaway domain in a temp copy of the
+project and checks that it boots, passes ruff, pyright, import-linter and deptry, that its
+generated tests pass, and that a second `create-all` changes nothing.
 
 ## API overview
 

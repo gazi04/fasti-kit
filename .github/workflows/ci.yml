@@ -95,3 +95,7 @@ jobs:
       - name: pytest
         if: ${{ !cancelled() }}
         run: uv run pytest --cov
+
+      - name: scaffolding smoke test
+        if: ${{ !cancelled() }}
+        run: ./scripts/smoke_scaffold.sh

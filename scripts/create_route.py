@@ -1,76 +1,69 @@
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.prompt import Prompt
 
 from scripts._boilerplate import (
-    to_pascal_case,
-    to_snake_case,
+    ask_domain,
+    ask_name,
+    cli_errors,
+    console,
+    format_paths,
+    pluralize,
+    require_domain,
+    resolve_names,
     update_init,
     write_new_file,
 )
 
-console = Console()
 
-
-def create_route(
-    domain: str = typer.Option(None, "--domain", "-d", help="Target domain folder"),
-    name: str = typer.Option(None, "--name", "-n", help="Entity/Route name"),
-    fields: str = typer.Option(
-        None, "--fields", "-f", help="Ignored for routes, kept for CLI consistency"
-    ),
-) -> None:
-    """Scaffold a new route interactively or via CLI flags."""
-
-    # 1. Interactive Prompts
-    if not domain:
-        domain = Prompt.ask(
-            "[bold blue]Enter domain name[/bold blue] (e.g., inventory)"
-        )
-    if not name:
-        name = Prompt.ask("[bold blue]Enter route name[/bold blue] (e.g., product)")
-
-    # 2. Setup Variables
-    snake = to_snake_case(name)
-    pascal = to_pascal_case(name)
+def generate_route(domain: str, name: str, fields: str = "") -> list[Path]:
+    snake, pascal = resolve_names(domain, name)
     route_var = f"{snake}_router"
-    prefix = snake.replace(
-        "_", "-"
-    )  # Standard REST practice (e.g. order-item instead of order_item)
+    prefix = snake.replace("_", "-")
 
-    # 3. Generate Content
     layer_dir = Path(domain) / "routes"
     file_path = layer_dir / f"{route_var}.py"
 
-    template = f"""from typing import Optional
-from uuid import UUID
+    template = f"""from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi_pagination.cursor import CursorPage, CursorParams
 
-from core.database import get_db
+from auth.dependencies import auth
+from {domain}.dependencies import get_{snake}_service
 from {domain}.entities.{snake} import {pascal}
-from {domain}.repositories.{snake}_repository import {pascal}Repository
-from {domain}.schemas.{snake}_schema import Create{pascal}Request, Update{pascal}Request, {pascal}Response
+from {domain}.schemas.{snake}_schema import (
+    Create{pascal}Request,
+    {pascal}Response,
+    Update{pascal}Request,
+)
 from {domain}.services.{snake}_service import {pascal}Service
-
-# Uncomment to require an authenticated caller (see auth/dependencies.py):
-# from authx import TokenPayload
-# from auth.dependencies import auth
 
 {route_var} = APIRouter(prefix="/{prefix}", tags=["{pascal}"])
 
+requires_access_token = [
+    Depends(auth.token_required(type="access", locations=["headers"]))
+]
 
-@{route_var}.post("/create", response_model={pascal}Response)
-async def create_{snake}(data: Create{pascal}Request, db: AsyncSession = Depends(get_db)) -> {pascal}:
-    service = {pascal}Service({pascal}Repository(db))
-    return await service.create(data)
+
+@{route_var}.post(
+    "/create", response_model={pascal}Response, dependencies=requires_access_token
+)
+async def create_{snake}(
+    data: Create{pascal}Request,
+    service: {pascal}Service = Depends(get_{snake}_service),
+) -> {pascal}:
+    try:
+        return await service.create(data)
+    except ValueError as err:
+        raise HTTPException(409, str(err)) from err
 
 
 @{route_var}.get("/get/{{id}}", response_model={pascal}Response)
-async def get_{snake}(id: UUID, db: AsyncSession = Depends(get_db)) -> Optional[{pascal}]:
-    service = {pascal}Service({pascal}Repository(db))
+async def get_{snake}(
+    id: UUID,
+    service: {pascal}Service = Depends(get_{snake}_service),
+) -> {pascal}:
     record = await service.get(id)
 
     if record is None:
@@ -79,19 +72,18 @@ async def get_{snake}(id: UUID, db: AsyncSession = Depends(get_db)) -> Optional[
     return record
 
 
-@{route_var}.patch("/update/{{id}}", response_model={pascal}Response)
+@{route_var}.patch(
+    "/update/{{id}}", response_model={pascal}Response, dependencies=requires_access_token
+)
 async def update_{snake}(
     id: UUID,
     data: Update{pascal}Request,
-    db: AsyncSession = Depends(get_db),
-    # payload: TokenPayload = Depends(auth.token_required(type='access', locations=['headers'])),
-) -> Optional[{pascal}]:
-    service = {pascal}Service({pascal}Repository(db))
-
+    service: {pascal}Service = Depends(get_{snake}_service),
+) -> {pascal}:
     try:
         record = await service.update(id, data)
-    except ValueError as exc:
-        raise HTTPException(409, str(exc))
+    except ValueError as err:
+        raise HTTPException(409, str(err)) from err
 
     if record is None:
         raise HTTPException(404, "{pascal} not found")
@@ -99,32 +91,57 @@ async def update_{snake}(
     return record
 
 
-@{route_var}.delete("/delete/{{id}}")
+@{route_var}.delete("/delete/{{id}}", dependencies=requires_access_token)
 async def delete_{snake}(
     id: UUID,
-    db: AsyncSession = Depends(get_db),
-    # payload: TokenPayload = Depends(auth.token_required(type='access', locations=['headers'])),
-):
-    service = {pascal}Service({pascal}Repository(db))
+    service: {pascal}Service = Depends(get_{snake}_service),
+) -> dict[str, str]:
     deleted = await service.delete(id)
 
     if deleted is None:
         raise HTTPException(404, "{pascal} not found")
 
     return {{"message": "{pascal} deleted"}}
+
+
+@{route_var}.get("/list", response_model=CursorPage[{pascal}Response])
+async def list_{pluralize(snake)}(
+    params: CursorParams = Depends(),
+    service: {pascal}Service = Depends(get_{snake}_service),
+) -> CursorPage[{pascal}]:
+    return await service.list(params)
 """
 
-    # 4. Write File & Update __init__.py
     write_new_file(file_path, template)
-    update_init(layer_dir / "__init__.py", route_var, [route_var])
+    init = update_init(layer_dir / "__init__.py", route_var, [route_var])
+    return [file_path, init]
 
+
+def create_route(
+    domain: str | None = typer.Option(
+        None, "--domain", "-d", help="Target domain folder"
+    ),
+    name: str | None = typer.Option(None, "--name", "-n", help="Entity/Route name"),
+    fields: str | None = typer.Option(
+        None, "--fields", "-f", help="Ignored for routes, kept for CLI consistency"
+    ),
+) -> None:
+    """Scaffold a new route interactively or via CLI flags."""
+    domain = ask_domain(domain)
+    name = ask_name(name, "route")
+
+    with cli_errors():
+        require_domain(domain)
+        paths = generate_route(domain, name)
+
+    format_paths(paths)
     console.print(
-        f"[bold green]✨ Created route {route_var} at {file_path}[/bold green]"
+        f"[bold green]✨ Routes for {name} are ready in {domain}/routes[/bold green]"
     )
     console.print(
-        f"\n[yellow]Reminder:[/yellow] mount the new router in [bold]core/api_versions.py[/bold]:\n"
-        f"    [cyan]from {domain}.routes import {route_var}[/cyan]\n"
-        f"    [cyan]v1_router.include_router({route_var})[/cyan]"
+        "[yellow]Reminder:[/yellow] the route needs its service factory in "
+        f"{domain}/dependencies.py (`create-dependencies`) and a mount in "
+        "core/api_versions.py. `create-all` does both for you."
     )
 
 

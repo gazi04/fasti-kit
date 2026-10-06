@@ -60,9 +60,9 @@ uv run deptry .                      # unused/missing dependency check
 uv run pip-audit                     # dependency vulnerability scan
 uv run pre-commit run --all-files    # run all of the above hooks at once
 
-# Tests — requires a real Postgres reachable at DATABASE_URL with "fasti_kit" swapped
-# for "fasti_kit_test" in the name (see tests/conftest.py); each test runs inside a
-# rolled-back SAVEPOINT so no test data persists
+# Tests — requires a real Postgres reachable at DATABASE_URL, using the database named
+# "<DATABASE_URL's db>_test" (e.g. fasti_kit -> fasti_kit_test, see tests/conftest.py), never
+# the dev database itself; each test runs inside a rolled-back SAVEPOINT so no test data persists
 uv run pytest
 uv run pytest tests/test_user_domain.py::test_name    # single test
 uv run pytest --cov                                    # coverage (fail_under = 70, see pyproject.toml)
@@ -121,7 +121,7 @@ Password hashing is `bcrypt` via `auth/services/security_service.py` — `hashpw
 
 ### Testing (`tests/`)
 
-`tests/conftest.py` provides `db_engine` (creates `Base.metadata` against a real `fasti_kit_test` database — no mocking, no testcontainers despite that dep group existing), `db` (wraps each test in an outer transaction + SAVEPOINT via `join_transaction_mode="create_savepoint"`, rolled back at teardown even if app code calls `commit()`), `client` (an `httpx.AsyncClient` against the ASGI app with `get_db` overridden to the transactional `db` session), and `query_counter` (counts SQL statements executed during a test, for asserting no N+1 regressions — pair with `core/middlewares/n1_detector.py`'s `X-Query-Count` header for manual checks against the dev server).
+`tests/conftest.py` provides `db_engine` (creates `Base.metadata` against a real `<db>_test` database derived from `DATABASE_URL`, refusing to run if it can't derive one — no mocking, no testcontainers despite that dep group existing), `db` (wraps each test in an outer transaction + SAVEPOINT via `join_transaction_mode="create_savepoint"`, rolled back at teardown even if app code calls `commit()`), `client` (an `httpx.AsyncClient` against the ASGI app with `get_db` overridden to the transactional `db` session), and `query_counter` (counts SQL statements executed during a test, for asserting no N+1 regressions — pair with `core/middlewares/n1_detector.py`'s `X-Query-Count` header for manual checks against the dev server).
 
 ### Docs (`docs/`)
 

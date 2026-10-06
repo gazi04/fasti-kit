@@ -1,6 +1,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import auth.dependencies as auth_dependencies
@@ -18,8 +19,10 @@ from core.setting import get_settings
 from main import app
 
 settings = get_settings()
-# Use a dedicated test database (e.g. localhost:5433 from docker-compose setup)
-TEST_DATABASE_URL = settings.database_url.replace("fasti_kit", "fasti_kit_test")
+_dev_url = make_url(settings.database_url)
+if not _dev_url.database:
+    raise RuntimeError("DATABASE_URL names no database to derive the test one from.")
+TEST_DATABASE_URL = _dev_url.set(database=f"{_dev_url.database}_test")
 
 
 @pytest.fixture(autouse=True)

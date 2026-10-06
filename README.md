@@ -329,8 +329,9 @@ uv run pytest tests/test_user_domain.py::test_name   # single test
 uv run pytest --cov                                   # coverage, fails under 70%
 ```
 
-Tests run against a real Postgres database (`DATABASE_URL` with `fasti_kit` swapped for
-`fasti_kit_test`) — no mocking, no testcontainers. Each test runs inside an outer
+Tests run against a real Postgres database: the one in `DATABASE_URL` with `_test` added to
+its name (`fasti_kit` -> `fasti_kit_test`), never the dev database itself. Create it once
+before the first run. No mocking, no testcontainers. Each test runs inside an outer
 transaction plus a `SAVEPOINT` that's rolled back at teardown, so nothing persists
 between tests even if the code under test calls `commit()`.
 

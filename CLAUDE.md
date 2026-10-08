@@ -93,6 +93,8 @@ This layering is not just convention — `pyproject.toml`'s `[tool.importlinter]
 
 Middleware order matters and is applied outermost-last (last `add_middleware` call runs first): `GZipMiddleware` → `SecurityHeadersMiddleware` (`core/middlewares/security_headers.py`, HSTS only when `environment == "production"`) → `CorrelationIdMiddleware` (`core/middlewares/correlation.py`, generates/propagates `X-Request-ID`, also catches middleware-stack crashes and returns RFC 7807 JSON) → `N1DetectorMiddleware` (`core/middlewares/n1_detector.py`, **local environment only**, counts queries per request via SQLAlchemy `before_cursor_execute` events, sets `X-Query-Count` header, logs a warning above `threshold`) → `CORSMiddleware`. Exception handlers are installed via `install_problem_handlers` (`core/problem.py`) and `install_auth_error_handlers` (`auth/errors.py`) — every error path, including validation errors, rate-limit 429s, and unhandled 500s, is normalized into a single `ProblemDetails` (RFC 7807 / `application/problem+json`) shape with a `correlation_id`.
 
+Routers included in `main.py`: `health_router` (`core/health.py`: `/health/live`, and `/health/ready` which probes primary DB, replica DB and Redis with 2s timeouts, and `/health/workers` which probes the SAQ worker, the outbox relay's Redis heartbeat (written by `relay_loop` after each successful dispatch) and the age of the oldest pending outbox row against `outbox_max_lag_seconds` — kept separate from `/ready` so a dead worker doesn't pull API instances out of rotation), `dlq_router` and `v1_router`.
+
 Startup runs `check_database`, `check_mail_config`, `check_jwt_config` (`core/startup_checks.py`) inside the `lifespan` and refuses to boot if any fail.
 
 ### `core/` — cross-cutting infrastructure

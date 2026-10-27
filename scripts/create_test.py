@@ -22,8 +22,10 @@ from scripts.create_factory import generate_factory
 def _required_imports(domain: str, snake: str, pascal: str) -> list[str]:
     return [
         "import uuid",
+        "import pytest",
         "from auth.dependencies import auth",
         "from core.api_versions import API_V1_PREFIX",
+        "from core.exception import EntityNotFoundError",
         f"from {domain}.repositories.{snake}_repository import {pascal}Repository",
         f"from {domain}.services.{snake}_service import {pascal}Service",
         f"from core.factories.{snake}_factory import (\n"
@@ -106,9 +108,10 @@ async def test_{snake}_service_create(db) -> None:
     assert record.id is not None
 
 
-async def test_{snake}_service_get_returns_none_for_missing(db) -> None:
+async def test_{snake}_service_get_raises_for_missing(db) -> None:
     service = {pascal}Service({pascal}Repository(db))
-    assert await service.get(uuid.uuid4()) is None
+    with pytest.raises(EntityNotFoundError):
+        await service.get(uuid.uuid4())
 
 
 async def test_{snake}_service_update(db) -> None:

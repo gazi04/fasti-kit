@@ -26,7 +26,7 @@ def generate_route(domain: str, name: str, fields: str = "") -> list[Path]:
 
     template = f"""from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi_pagination.cursor import CursorPage, CursorParams
 
 from auth.dependencies import auth
@@ -53,10 +53,7 @@ async def create_{snake}(
     data: Create{pascal}Request,
     service: {pascal}Service = Depends(get_{snake}_service),
 ) -> {pascal}:
-    try:
-        return await service.create(data)
-    except ValueError as err:
-        raise HTTPException(409, str(err)) from err
+    return await service.create(data)
 
 
 @{route_var}.get("/get/{{id}}", response_model={pascal}Response)
@@ -64,12 +61,7 @@ async def get_{snake}(
     id: UUID,
     service: {pascal}Service = Depends(get_{snake}_service),
 ) -> {pascal}:
-    record = await service.get(id)
-
-    if record is None:
-        raise HTTPException(404, "{pascal} not found")
-
-    return record
+    return await service.get(id)
 
 
 @{route_var}.patch(
@@ -80,15 +72,7 @@ async def update_{snake}(
     data: Update{pascal}Request,
     service: {pascal}Service = Depends(get_{snake}_service),
 ) -> {pascal}:
-    try:
-        record = await service.update(id, data)
-    except ValueError as err:
-        raise HTTPException(409, str(err)) from err
-
-    if record is None:
-        raise HTTPException(404, "{pascal} not found")
-
-    return record
+    return await service.update(id, data)
 
 
 @{route_var}.delete("/delete/{{id}}", dependencies=requires_access_token)
@@ -96,10 +80,7 @@ async def delete_{snake}(
     id: UUID,
     service: {pascal}Service = Depends(get_{snake}_service),
 ) -> dict[str, str]:
-    deleted = await service.delete(id)
-
-    if deleted is None:
-        raise HTTPException(404, "{pascal} not found")
+    await service.delete(id)
 
     return {{"message": "{pascal} deleted"}}
 

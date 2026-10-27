@@ -25,6 +25,7 @@ def generate_service(domain: str, name: str, fields: str = "") -> list[Path]:
 
 from fastapi_pagination.cursor import CursorPage, CursorParams
 
+from core.exception import EntityNotFoundError
 from {domain}.entities.{snake} import {pascal}
 from {domain}.repositories.{snake}_repository import {pascal}Repository
 from {domain}.schemas.{snake}_schema import Create{pascal}Request, Update{pascal}Request
@@ -34,24 +35,35 @@ class {pascal}Service:
     def __init__(self, repo: {pascal}Repository) -> None:
         self.repo = repo
 
-    async def create(
-        self, data: Create{pascal}Request, auto_commit: bool = True
-    ) -> {pascal}:
-        return await self.repo.add(**data.model_dump(), auto_commit=auto_commit)
+    async def create(self, data: Create{pascal}Request) -> {pascal}:
+        return await self.repo.add(**data.model_dump())
 
-    async def get(self, id: UUID) -> {pascal} | None:
-        return await self.repo.get(id)
+    async def get(self, id: UUID) -> {pascal}:
+        record = await self.repo.get(id)
 
-    async def update(self, id: UUID, data: Update{pascal}Request) -> {pascal} | None:
-        return await self.repo.update(id=id, **data.model_dump(exclude_unset=True))
+        if record is None:
+            raise EntityNotFoundError("{pascal}", str(id))
 
-    async def delete(
-        self, id: UUID, force: bool = False, auto_commit: bool = True
-    ) -> {pascal} | None:
+        return record
+
+    async def update(self, id: UUID, data: Update{pascal}Request) -> {pascal}:
+        record = await self.repo.update(id=id, **data.model_dump(exclude_unset=True))
+
+        if record is None:
+            raise EntityNotFoundError("{pascal}", str(id))
+
+        return record
+
+    async def delete(self, id: UUID, force: bool = False) -> {pascal}:
         if force:
-            return await self.repo.force_delete(id, auto_commit=auto_commit)
+            record = await self.repo.force_delete(id)
+        else:
+            record = await self.repo.delete(id)
 
-        return await self.repo.delete(id, auto_commit=auto_commit)
+        if record is None:
+            raise EntityNotFoundError("{pascal}", str(id))
+
+        return record
 
     async def list(self, params: CursorParams | None = None) -> CursorPage[{pascal}]:
         return await self.repo.list(params)

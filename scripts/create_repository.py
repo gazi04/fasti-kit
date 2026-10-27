@@ -23,7 +23,7 @@ def generate_repository(domain: str, name: str, fields: str = "") -> list[Path]:
 
     if parsed_fields:
         add_params = ", ".join([f"{f['name']}: {f['py_type']}" for f in parsed_fields])
-        add_signature = f"self, {add_params}, auto_commit: bool = True"
+        add_signature = f"self, {add_params}"
         model_kwargs = ", ".join([f"{f['name']}={f['name']}" for f in parsed_fields])
         model_instantiation = f"{pascal}Model({model_kwargs})"
         to_entity_fields = (
@@ -33,7 +33,7 @@ def generate_repository(domain: str, name: str, fields: str = "") -> list[Path]:
             + "\n            "
         )
     else:
-        add_signature = "self, auto_commit: bool = True, **fields"
+        add_signature = "self, **fields"
         model_instantiation = f"{pascal}Model(**fields)"
         to_entity_fields = "# TODO: map domain-specific fields here (e.g. name=model.name)\n            "
 
@@ -52,7 +52,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import force_primary_var
+from core.database import force_primary_var, transaction
+from core.exception import ConflictError
 from {domain}.entities.{snake} import {pascal}
 from {domain}.models import {pascal}Model
 
@@ -65,13 +66,9 @@ class {pascal}Repository:
         force_primary_var.set(True)
         model = {model_instantiation}
 
-        await self._flush_or_raise(model)
-
-        if auto_commit:
-            await self.db.commit()
-            await self.db.refresh(model)
-
-        return self._to_entity(model)
+        async with transaction(self.db):
+            await self._flush_or_raise(model)
+            return self._to_entity(model)
 
     async def get(self, id: UUID) -> {pascal} | None:
         result = await self.db.scalar(select({pascal}Model).where({pascal}Model.id == id))
@@ -81,47 +78,32 @@ class {pascal}Repository:
 
         return self._to_entity(result)
 
-    async def update(
-        self, id: UUID, auto_commit: bool = True, **fields
-    ) -> {pascal} | None:
+    async def update(self, id: UUID, **fields) -> {pascal} | None:
         force_primary_var.set(True)
         record = await self.db.get({pascal}Model, id)
 
         if record is None:
             return None
 
-        for key, value in fields.items():
-            setattr(record, key, value)
-
-        if auto_commit:
+        async with transaction(self.db):
+            for key, value in fields.items():
+                setattr(record, key, value)
             await self._flush_or_raise()
-            await self.db.commit()
-            await self.db.refresh(record)
-        else:
-            await self._flush_or_raise()
+            return self._to_entity(record)
 
-        return self._to_entity(record)
-
-    async def delete(self, id: UUID, auto_commit: bool = True) -> {pascal} | None:
+    async def delete(self, id: UUID) -> {pascal} | None:
         force_primary_var.set(True)
         record = await self.db.get({pascal}Model, id)
 
         if record is None:
             return None
 
-        record.is_active = False
-
-        if auto_commit:
-            await self.db.commit()
-            await self.db.refresh(record)
-        else:
+        async with transaction(self.db):
+            record.is_active = False
             await self.db.flush()
+            return self._to_entity(record)
 
-        return self._to_entity(record)
-
-    async def force_delete(
-        self, id: UUID, auto_commit: bool = True
-    ) -> {pascal} | None:
+    async def force_delete(self, id: UUID) -> {pascal} | None:
         force_primary_var.set(True)
         record = await self.db.get({pascal}Model, id)
 
@@ -129,11 +111,8 @@ class {pascal}Repository:
             return None
         result = self._to_entity(record)
 
-        await self.db.delete(record)
-
-        if auto_commit:
-            await self.db.commit()
-        else:
+        async with transaction(self.db):
+            await self.db.delete(record)
             await self.db.flush()
 
         return result
@@ -149,22 +128,12 @@ class {pascal}Repository:
         )
 
     async def _flush_or_raise(self, model: {pascal}Model | None = None) -> None:
-        \"\"\"Flush inside a SAVEPOINT so a constraint violation stays contained.
-
-        `model` is added *inside* the savepoint on purpose. Adding it beforehand
-        would put it in the outer SessionTransaction, so a flush failure inside
-        the savepoint would deactivate the outer transaction too
-        (PendingRollbackError on every later statement).
-        \"\"\"
         try:
-            async with self.db.begin_nested():
-                if model is not None:
-                    self.db.add(model)
-                await self.db.flush()
+            if model is not None:
+                self.db.add(model)
+            await self.db.flush()
         except IntegrityError as err:
-            # TODO: inspect err.orig for the violated column and raise a
-            # field-specific ValueError once you know your unique constraints.
-            raise ValueError("{pascal} violates a uniqueness constraint") from err
+            raise ConflictError("{pascal} violates a uniqueness constraint") from err
 
     @staticmethod
     def _to_entity(model: {pascal}Model) -> {pascal}:

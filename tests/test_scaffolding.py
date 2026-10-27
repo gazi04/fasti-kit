@@ -76,7 +76,8 @@ def test_generate_repository_matches_user_repository_pattern(tmp_path, monkeypat
 
     assert "from core.database import force_primary_var" in content
     assert content.count("force_primary_var.set(True)") == 4
-    assert "auto_commit: bool = True" in content
+    assert "auto_commit" not in content
+    assert "async with transaction(self.db):" in content
     assert "_flush_or_raise" in content
     assert "async def list(" in content
     assert "if value is None:" not in content
@@ -88,7 +89,7 @@ def test_generate_repository_fallback_fields_signature(tmp_path, monkeypatch):
 
     content = Path("scratch/repositories/widget_repository.py").read_text()
 
-    assert "self, auto_commit: bool = True, **fields" in content
+    assert "async def add(self, **fields)" in content
 
 
 def test_generate_factory_builds_real_update_values(tmp_path, monkeypatch):

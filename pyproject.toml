@@ -170,3 +170,17 @@ name = "auth never reaches user's HTTP layer, even transitively"
 type = "forbidden"
 source_modules = ["auth"]
 forbidden_modules = ["user.routes"]
+
+[[tool.importlinter.contracts]]
+name = "routes and services never touch the DB session"
+type = "forbidden"
+source_modules = ["*.routes", "*.services"]
+forbidden_modules = ["sqlalchemy", "core.database"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "services and repositories never speak HTTP"
+type = "forbidden"
+source_modules = ["*.services", "*.repositories"]
+forbidden_modules = ["fastapi"]
+allow_indirect_imports = true

@@ -10,7 +10,9 @@ back except /resend-verification. Both writes now share one transaction.
 import pytest
 from sqlalchemy import select
 
+from core.exception import ConflictError
 from core.factories.user_factory import make_email
+from core.outbox.repository import OutboxRepository
 from user.models import UserModel
 from user.repositories.user_repository import UserRepository
 
@@ -59,10 +61,10 @@ async def test_create_user_leaves_no_row_when_second_write_fails(
     """The whole signup rolls back — no half-created account."""
     email = make_email()
 
-    async def failing_update(self, id, auto_commit=True, **fields):
-        raise RuntimeError("simulated failure stamping the verification jti")
+    async def failing_stage_add(self, task_name, payload):
+        raise RuntimeError("simulated failure writing the outbox row")
 
-    monkeypatch.setattr(UserRepository, "update", failing_update)
+    monkeypatch.setattr(OutboxRepository, "stage_add", failing_stage_add)
 
     response = await client.post(
         CREATE_URL,
@@ -84,10 +86,10 @@ async def test_create_user_can_be_retried_after_a_failure(
     """Because nothing persisted, the same email is still free."""
     email = make_email()
 
-    async def failing_update(self, id, auto_commit=True, **fields):
+    async def failing_stage_add(self, task_name, payload):
         raise RuntimeError("simulated failure")
 
-    monkeypatch.setattr(UserRepository, "update", failing_update)
+    monkeypatch.setattr(OutboxRepository, "stage_add", failing_stage_add)
     first = await client.post(
         CREATE_URL, json={"name": "Retry Me", "email": email, "password": "pw123456"}
     )
@@ -124,7 +126,7 @@ async def test_duplicate_email_leaves_the_session_usable(db) -> None:
     email = make_email()
     await repo.add("First", email, "pw")
 
-    with pytest.raises(ValueError, match="Email taken"):
+    with pytest.raises(ConflictError, match="Email already in use"):
         await repo.add("Second", email, "pw")
 
     # The outer transaction is still alive and the first row is intact.

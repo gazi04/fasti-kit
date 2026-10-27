@@ -12,6 +12,7 @@ from authx import TokenPayload
 from fastapi import HTTPException
 
 from auth.dependencies import auth
+from core.exception import ConflictError
 from core.factories.user_factory import (
     CreateUserRequestFactory,
     UpdateUserRequestFactory,
@@ -95,7 +96,7 @@ async def test_repository_update_can_clear_nullable_field(db) -> None:
 
     The old "skip None values" guard was removed on purpose so pending token
     fields can be cleared once consumed — see the verify-email/reset-password
-    flows in auth_router.py.
+    flows in AuthService.
     """
     repo = UserRepository(db)
     email = make_email()
@@ -156,12 +157,12 @@ async def test_repository_force_delete_returns_none_for_missing(db) -> None:
 
 
 async def test_repository_add_raises_on_duplicate_email(db) -> None:
-    """add() raises ValueError when the email is already taken."""
+    """add() raises ConflictError when the email is already taken."""
     repo = UserRepository(db)
     email = make_email()
     await repo.add("First", email, "pw1")
 
-    with pytest.raises(ValueError, match="Email taken"):
+    with pytest.raises(ConflictError, match="Email already in use"):
         await repo.add("Second", email, "pw2")
 
 

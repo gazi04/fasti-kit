@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -42,25 +43,43 @@ async def _count_outbox(db) -> int:
     return await db.scalar(select(func.count()).select_from(OutboxEvent)) or 0
 
 
-async def test_add_commits_atomically_with_a_business_write(db) -> None:
+async def test_register_commits_the_outbox_row_with_the_user(db) -> None:
     user_repo = UserRepository(db)
-    outbox_repo = OutboxRepository(db)
+    user_id = uuid.uuid4()
 
-    user = await user_repo.add("Outbox Atomic", make_email(), "pw", auto_commit=False)
-    await outbox_repo.add("send_email_task", PAYLOAD)
-    await db.commit()
+    user = await user_repo.register(
+        id=user_id,
+        full_name="Outbox Atomic",
+        email=make_email(),
+        password_hash="pw",
+        pending_verification_jti="jti",
+        email_payload=PAYLOAD,
+    )
 
+    assert user.id == user_id
     assert await _count_outbox(db) == 1
     assert await user_repo.get(user.id) is not None
 
 
-async def test_add_rolls_back_with_the_business_write(db) -> None:
-    outbox_repo = OutboxRepository(db)
+async def test_register_rolls_back_the_user_when_the_outbox_write_fails(
+    db, monkeypatch
+) -> None:
     email = make_email()
 
-    await UserRepository(db).add("Doomed", email, "pw", auto_commit=False)
-    await outbox_repo.add("send_email_task", PAYLOAD)
-    await db.rollback()
+    async def failing_stage_add(self, task_name, payload):
+        raise RuntimeError("simulated outbox failure")
+
+    monkeypatch.setattr(OutboxRepository, "stage_add", failing_stage_add)
+
+    with pytest.raises(RuntimeError):
+        await UserRepository(db).register(
+            id=uuid.uuid4(),
+            full_name="Doomed",
+            email=email,
+            password_hash="pw",
+            pending_verification_jti="jti",
+            email_payload=PAYLOAD,
+        )
 
     assert await _count_outbox(db) == 0
     row = await db.scalar(select(UserModel).where(UserModel.email == email))
@@ -71,8 +90,8 @@ async def test_dispatch_pending_enqueues_with_dedup_key_and_marks_dispatched(
     db, recorded_enqueue
 ) -> None:
     outbox_repo = OutboxRepository(db)
-    a = await outbox_repo.add("send_email_task", PAYLOAD)
-    b = await outbox_repo.add("send_email_task", {**PAYLOAD, "subject": "s2"})
+    a = await outbox_repo.stage_add("send_email_task", PAYLOAD)
+    b = await outbox_repo.stage_add("send_email_task", {**PAYLOAD, "subject": "s2"})
     await db.commit()
 
     dispatched, failed = await dispatch_pending(db, batch_size=10)
@@ -94,7 +113,7 @@ async def test_dispatch_pending_records_failure_without_marking_dispatched(
 
     monkeypatch.setattr(relay, "enqueue_task", _boom)
 
-    row = await OutboxRepository(db).add("send_email_task", PAYLOAD)
+    row = await OutboxRepository(db).stage_add("send_email_task", PAYLOAD)
     await db.commit()
 
     dispatched, failed = await dispatch_pending(db, batch_size=10)
@@ -113,7 +132,7 @@ async def test_dispatch_pending_parks_row_after_max_attempts(db, monkeypatch) ->
 
     monkeypatch.setattr(relay, "enqueue_task", _boom)
 
-    row = await OutboxRepository(db).add("send_email_task", PAYLOAD)
+    row = await OutboxRepository(db).stage_add("send_email_task", PAYLOAD)
     row.attempts = get_settings().outbox_max_attempts - 1
     await db.commit()
 
@@ -131,11 +150,11 @@ async def test_dispatch_pending_skips_dispatched_and_failed_rows(
     db, recorded_enqueue
 ) -> None:
     outbox_repo = OutboxRepository(db)
-    done = await outbox_repo.add("send_email_task", PAYLOAD)
+    done = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     done.dispatched_at = datetime.now(UTC)
-    dead = await outbox_repo.add("send_email_task", PAYLOAD)
+    dead = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     dead.failed_at = datetime.now(UTC)
-    pending = await outbox_repo.add("send_email_task", PAYLOAD)
+    pending = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     await db.commit()
 
     dispatched, failed = await dispatch_pending(db, batch_size=10)
@@ -148,11 +167,11 @@ async def test_cleanup_dispatched_deletes_only_old_dispatched_rows(db) -> None:
     outbox_repo = OutboxRepository(db)
     retention = get_settings().outbox_retention_days
 
-    old = await outbox_repo.add("send_email_task", PAYLOAD)
+    old = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     old.dispatched_at = datetime.now(UTC) - timedelta(days=retention + 1)
-    recent = await outbox_repo.add("send_email_task", PAYLOAD)
+    recent = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     recent.dispatched_at = datetime.now(UTC)
-    pending = await outbox_repo.add("send_email_task", PAYLOAD)
+    pending = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     await db.commit()
 
     deleted = await cleanup_dispatched(db)
@@ -180,10 +199,10 @@ async def test_create_user_writes_a_single_outbox_row(client, db) -> None:
 
 
 async def test_failed_signup_leaves_no_outbox_row(client, db, monkeypatch) -> None:
-    async def failing_update(self, id, auto_commit=True, **fields):
-        raise RuntimeError("simulated jti failure")
+    async def failing_stage_add(self, task_name, payload):
+        raise RuntimeError("simulated outbox failure")
 
-    monkeypatch.setattr(UserRepository, "update", failing_update)
+    monkeypatch.setattr(OutboxRepository, "stage_add", failing_stage_add)
 
     response = await client.post(
         CREATE_URL,

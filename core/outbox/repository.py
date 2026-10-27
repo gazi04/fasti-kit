@@ -10,19 +10,9 @@ class OutboxRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db: AsyncSession = db
 
-    async def add(
-        self,
-        task_name: str,
-        payload: dict[str, Any],
-        *,
-        auto_commit: bool = False,
-    ) -> OutboxEvent:
+    async def stage_add(self, task_name: str, payload: dict[str, Any]) -> OutboxEvent:
         force_primary_var.set(True)
         event = OutboxEvent(task_name=task_name, payload=payload)
         self.db.add(event)
         await self.db.flush()
-
-        if auto_commit:
-            await self.db.commit()
-
         return event

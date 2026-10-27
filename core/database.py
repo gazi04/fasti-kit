@@ -236,6 +236,16 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
         yield db
 
 
+@asynccontextmanager
+async def transaction(db: AsyncSession) -> AsyncGenerator[None]:
+    try:
+        yield
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+
 async def dispose_engines() -> None:
     """Close both engine connection pools.
 

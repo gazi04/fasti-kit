@@ -1,20 +1,20 @@
-from datetime import UTC, datetime
 from uuid import UUID
 
-import jwt
 from authx import TokenPayload
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Request,
     Response,
 )
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import auth, get_revoked_token_repository, require_scopes
-from auth.repositories.revoked_token_repository import RevokedTokenRepository
+from auth.dependencies import (
+    auth,
+    get_auth_service,
+    get_auth_session,
+    require_scopes,
+)
+from auth.entities.auth_session import AuthSession
 from auth.schemas.auth_schema import (
     ForgotPasswordRequest,
     LoginRequest,
@@ -22,21 +22,10 @@ from auth.schemas.auth_schema import (
     ResendVerificationRequest,
     ResetPasswordRequest,
 )
-from auth.services.email_verification_service import (
-    VERIFY_TYPE,
-    EmailVerificationService,
-)
-from auth.services.password_reset_service import RESET_TYPE, PasswordResetService
-from auth.services.security_service import SecurityService
-from auth.services.token_service import TokenService
-from core.database import force_primary_var, get_db
+from auth.services.auth_service import AuthService
 from core.deprecation import DeprecationRoute, deprecated
 from core.limiter import limiter
 from core.openapi import problem_responses
-from core.outbox.dependencies import get_outbox_repository
-from core.outbox.repository import OutboxRepository
-from user.dependencies import get_user_repository
-from user.repositories.user_repository import UserRepository
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"], route_class=DeprecationRoute)
 
@@ -47,13 +36,9 @@ async def login(
     data: LoginRequest,
     request: Request,
     response: Response,
-    user_repository: UserRepository = Depends(get_user_repository),
+    service: AuthService = Depends(get_auth_service),
 ) -> LoginResponse:
-    user = await SecurityService.authenticate(
-        data.email, data.password, user_repository
-    )
-    if user is None:
-        raise HTTPException(401, detail="Invalid credentials")
+    user = await service.login(data.email, data.password)
 
     token = auth.create_access_token(uid=str(user.id), scopes=user.scopes.split())
     refresh_token = auth.create_refresh_token(uid=str(user.id))
@@ -74,16 +59,12 @@ async def protected(
 @limiter.limit("5/minute")
 async def refresh(
     request: Request,
-    user_repo: UserRepository = Depends(get_user_repository),
+    service: AuthService = Depends(get_auth_service),
     payload: TokenPayload = Depends(
         auth.token_required(type="refresh", locations=["cookies"])
     ),
 ) -> LoginResponse:
-    force_primary_var.set(True)
-    user = await user_repo.get(UUID(payload.sub))
-
-    if user is None or not user.is_active or not user.is_verified:
-        raise HTTPException(401, detail="Invalid credentials")
+    user = await service.refresh(UUID(payload.sub))
 
     new_access_token = auth.create_access_token(
         uid=payload.sub, scopes=user.scopes.split()
@@ -93,14 +74,11 @@ async def refresh(
 
 @auth_router.post("/logout")
 async def logout(
-    request: Request,
     response: Response,
-    payload: TokenPayload = Depends(
-        auth.token_required(type="access", locations=["headers"])
-    ),
-    db: AsyncSession = Depends(get_db),
+    service: AuthService = Depends(get_auth_service),
+    session: AuthSession = Depends(get_auth_session),
 ) -> dict:
-    await TokenService.revoke_tokens(request, payload, db)
+    await service.logout(session.tokens)
     auth.unset_refresh_cookies(response)
     return {"message": "Logged out"}
 
@@ -110,42 +88,9 @@ async def logout(
 async def verify_email(
     token: str,
     request: Request,
-    user_repo: UserRepository = Depends(get_user_repository),
-    token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository),
-    db: AsyncSession = Depends(get_db),
+    service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    force_primary_var.set(True)
-    try:
-        payload = await EmailVerificationService.decode_verification_token(token)
-    except jwt.PyJWTError as err:
-        raise HTTPException(400, detail="Invalid or expired verification link") from err
-
-    if payload.get("type") != VERIFY_TYPE:
-        raise HTTPException(400, detail="Invalid verification token")
-
-    if await token_repo.exists(payload["jti"]):
-        raise HTTPException(400, detail="Verification link already used")
-
-    user = await user_repo.get(UUID(payload["sub"]))
-    if user is None:
-        raise HTTPException(404, detail="User not found")
-
-    if user.pending_verification_jti != payload["jti"]:
-        raise HTTPException(
-            400, detail="Verification link has been superseded by a newer request"
-        )
-
-    await user_repo.update(id=user.id, is_verified=True, auto_commit=False)
-
-    expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
-
-    try:
-        await token_repo.add(payload["jti"], expires_at, auto_commit=False)
-        await db.commit()
-    except (ValueError, IntegrityError) as err:
-        await db.rollback()
-        raise HTTPException(400, detail="Verification link already used") from err
-
+    await service.verify_email(token)
     return {"message": "Email verified"}
 
 
@@ -154,25 +99,9 @@ async def verify_email(
 async def resend_verification(
     data: ResendVerificationRequest,
     request: Request,
-    user_repo: UserRepository = Depends(get_user_repository),
-    outbox_repo: OutboxRepository = Depends(get_outbox_repository),
-    db: AsyncSession = Depends(get_db),
+    service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    user = await user_repo.get_by_email(data.email)
-
-    if user is not None and not user.is_verified:
-        token, pending_jti = EmailVerificationService.create_verification_token(
-            str(user.id)
-        )
-        await user_repo.update(
-            user.id, pending_verification_jti=pending_jti, auto_commit=False
-        )
-        await outbox_repo.add(
-            "send_email_task",
-            EmailVerificationService.build_email_payload(user.email, token),
-        )
-        await db.commit()
-
+    await service.resend_verification(data.email)
     return {
         "message": (
             "If an account with that email exists and is unverified, "
@@ -186,23 +115,9 @@ async def resend_verification(
 async def forgot_password(
     data: ForgotPasswordRequest,
     request: Request,
-    user_repo: UserRepository = Depends(get_user_repository),
-    outbox_repo: OutboxRepository = Depends(get_outbox_repository),
-    db: AsyncSession = Depends(get_db),
+    service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    user = await user_repo.get_by_email(data.email)
-
-    if user is not None and user.is_active:
-        token, jti = PasswordResetService.create_reset_token(str(user.id))
-        await user_repo.update(
-            user.id, pending_password_reset_jti=jti, auto_commit=False
-        )
-        await outbox_repo.add(
-            "send_email_task",
-            PasswordResetService.build_email_payload(user.email, token),
-        )
-        await db.commit()
-
+    await service.forgot_password(data.email)
     return {
         "message": (
             "If an account with that email exists, a password reset link has been sent."
@@ -215,42 +130,9 @@ async def forgot_password(
 async def reset_password(
     data: ResetPasswordRequest,
     request: Request,
-    user_repo: UserRepository = Depends(get_user_repository),
-    token_repo: RevokedTokenRepository = Depends(get_revoked_token_repository),
-    db: AsyncSession = Depends(get_db),
+    service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    force_primary_var.set(True)
-    try:
-        payload = await PasswordResetService.decode_reset_token(data.token)
-    except jwt.PyJWTError as err:
-        raise HTTPException(400, detail="Invalid or expired reset link") from err
-
-    if payload.get("type") != RESET_TYPE:
-        raise HTTPException(400, detail="Invalid reset token")
-
-    if await token_repo.exists(payload["jti"]):
-        raise HTTPException(400, detail="Reset link already used")
-
-    user = await user_repo.get(UUID(payload["sub"]))
-    if user is None or not user.is_active:
-        raise HTTPException(404, detail="User not found")
-
-    if user.pending_password_reset_jti != payload["jti"]:
-        raise HTTPException(
-            400, detail="Reset link has been superseded by a newer request"
-        )
-
-    new_hash = SecurityService.hash_password(data.new_password)
-    await user_repo.update(id=user.id, password_hash=new_hash, auto_commit=False)
-
-    expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
-    try:
-        await token_repo.add(payload["jti"], expires_at, auto_commit=False)
-        await db.commit()
-    except (ValueError, IntegrityError) as err:
-        await db.rollback()
-        raise HTTPException(400, detail="Reset link already used") from err
-
+    await service.reset_password(data.token, data.new_password)
     return {"message": "Password has been reset"}
 
 

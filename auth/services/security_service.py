@@ -2,7 +2,6 @@ from uuid import uuid4
 
 from bcrypt import checkpw, gensalt, hashpw
 
-from core.database import force_primary_var
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 
@@ -20,8 +19,7 @@ class SecurityService:
     async def authenticate(
         email: str, password: str, user_repository: UserRepository
     ) -> User | None:
-        force_primary_var.set(True)
-        user = await user_repository.get_by_email(email)
+        user = await user_repository.get_by_email(email, consistent=True)
 
         password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
         password_ok = SecurityService.check_password(password, password_hash)

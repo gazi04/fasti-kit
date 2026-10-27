@@ -1,12 +1,18 @@
+import contextlib
 from typing import Any
+from uuid import UUID
 
-from authx import AuthX, AuthXConfig, TokenPayload
-from fastapi import Depends, HTTPException
+from authx import AuthX, AuthXConfig, JWTDecodeError, TokenPayload
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.entities.auth_session import AuthSession, TokenRef
+from auth.repositories.account_repository import AccountRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
+from auth.services.auth_service import AuthService
 from core.database import AsyncSessionLocal, get_db
 from core.setting import get_settings
+from user.repositories.user_repository import UserRepository
 
 settings = get_settings()
 
@@ -40,6 +46,40 @@ def get_revoked_token_repository(
     db: AsyncSession = Depends(get_db),
 ) -> RevokedTokenRepository:
     return RevokedTokenRepository(db)
+
+
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+    return AuthService(
+        UserRepository(db), AccountRepository(db), RevokedTokenRepository(db)
+    )
+
+
+def get_auth_session(
+    request: Request,
+    payload: TokenPayload = Depends(
+        auth.token_required(type="access", locations=["headers"])
+    ),
+) -> AuthSession:
+    tokens: list[TokenRef] = []
+
+    if payload.jti is not None:
+        tokens.append(TokenRef(payload.jti, payload.expiry_datetime))
+
+    refresh_token = request.cookies.get(auth.config.JWT_REFRESH_COOKIE_NAME)
+    if refresh_token:
+        with contextlib.suppress(JWTDecodeError):
+            refresh_payload = TokenPayload.decode(
+                refresh_token,
+                key=settings.jwt_secret_key,
+                algorithms=[settings.jwt_algorithm],
+                verify=True,
+            )
+            if refresh_payload.jti is not None:
+                tokens.append(
+                    TokenRef(refresh_payload.jti, refresh_payload.expiry_datetime)
+                )
+
+    return AuthSession(user_id=UUID(payload.sub), tokens=tokens)
 
 
 def require_scopes(*required: str, all_required: bool = True):

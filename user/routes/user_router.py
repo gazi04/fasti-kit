@@ -4,24 +4,17 @@ from authx import TokenPayload
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Request,
     Response,
 )
 from fastapi_pagination.cursor import CursorPage, CursorParams
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import auth
-from auth.services.email_verification_service import EmailVerificationService
-from auth.services.token_service import TokenService
-from core.cache import invalidate_tags
-from core.database import get_db
+from auth.dependencies import auth, get_auth_service, get_auth_session
+from auth.entities.auth_session import AuthSession
+from auth.services.auth_service import AuthService
 from core.limiter import limiter
-from core.outbox.dependencies import get_outbox_repository
-from core.outbox.repository import OutboxRepository
-from user.dependencies import get_current_user, get_user_repository, get_user_service
+from user.dependencies import get_current_user, get_user_service
 from user.entities.user import User
-from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import (
     CreateUserRequest,
     UpdateUserRequest,
@@ -37,32 +30,9 @@ user_router = APIRouter(prefix="/user", tags=["User"])
 async def create_user(
     data: CreateUserRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    user_repo: UserRepository = Depends(get_user_repository),
     service: UserService = Depends(get_user_service),
-    outbox_repo: OutboxRepository = Depends(get_outbox_repository),
 ) -> User:
-    try:
-        user = await service.register(data, auto_commit=False)
-    except ValueError as err:
-        raise HTTPException(409, "Email already in use") from err
-
-    token, jti = EmailVerificationService.create_verification_token(str(user.id))
-
-    try:
-        await user_repo.update(user.id, pending_verification_jti=jti, auto_commit=False)
-        await outbox_repo.add(
-            "send_email_task",
-            EmailVerificationService.build_email_payload(user.email, token),
-        )
-        await db.commit()
-    except Exception as err:
-        await db.rollback()
-        raise HTTPException(
-            500, detail="Failed to schedule verification email"
-        ) from err
-
-    return user
+    return await service.register(data)
 
 
 @user_router.get("/get", response_model=UserResponse)
@@ -80,38 +50,16 @@ async def update_user(
         auth.token_required(type="access", locations=["headers"])
     ),
 ):
-    user_id = UUID(payload.sub)
-
-    try:
-        user = await service.update(user_id, data)
-    except ValueError as err:
-        raise HTTPException(409, "Email already in use") from err
-
-    if user is None:
-        raise HTTPException(404, "User not found")
-
-    return user
+    return await service.update(UUID(payload.sub), data)
 
 
 @user_router.delete("/delete")
 async def delete_user(
-    request: Request,
     response: Response,
-    db: AsyncSession = Depends(get_db),
-    service: UserService = Depends(get_user_service),
-    payload: TokenPayload = Depends(
-        auth.token_required(type="access", locations=["headers"])
-    ),
+    service: AuthService = Depends(get_auth_service),
+    session: AuthSession = Depends(get_auth_session),
 ):
-    user_id = UUID(payload.sub)
-    deleted = await service.delete(user_id, auto_commit=False)
-
-    if deleted is None:
-        raise HTTPException(404, "User not found")
-
-    await TokenService.revoke_tokens(request, payload, db, auto_commit=False)
-    await db.commit()
-    await invalidate_tags("users")
+    await service.close_account(session.user_id, session.tokens)
 
     auth.unset_refresh_cookies(response)
     return {"message": "User deleted"}
@@ -120,9 +68,9 @@ async def delete_user(
 @user_router.get("/list", response_model=CursorPage[UserResponse])
 async def list_users(
     params: CursorParams = Depends(),
-    user_repo: UserRepository = Depends(get_user_repository),
+    service: UserService = Depends(get_user_service),
     payload: TokenPayload = Depends(
         auth.token_required(type="access", locations=["headers"])
     ),
 ) -> CursorPage[User]:
-    return await user_repo.list(params)
+    return await service.list(params)

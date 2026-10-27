@@ -16,3 +16,7 @@ class User:
     created_at: datetime
     updated_at: datetime
     scopes: str = "users:read users:write"
+
+    @property
+    def scope_list(self) -> list[str]:
+        return self.scopes.split()

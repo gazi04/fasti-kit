@@ -53,3 +53,13 @@ class ConflictError(DomainException):
             type_str="errors/conflict",
             title="Resource Conflict",
         )
+
+
+class BadRequestError(DomainException):
+    def __init__(self, detail: str):
+        super().__init__(
+            detail=detail,
+            status_code=400,
+            type_str="errors/bad-request",
+            title="Bad Request",
+        )

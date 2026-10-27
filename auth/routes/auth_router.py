@@ -40,7 +40,7 @@ async def login(
 ) -> LoginResponse:
     user = await service.login(data.email, data.password)
 
-    token = auth.create_access_token(uid=str(user.id), scopes=user.scopes.split())
+    token = auth.create_access_token(uid=str(user.id), scopes=user.scope_list)
     refresh_token = auth.create_refresh_token(uid=str(user.id))
 
     auth.set_refresh_cookies(refresh_token, response)
@@ -66,9 +66,7 @@ async def refresh(
 ) -> LoginResponse:
     user = await service.refresh(UUID(payload.sub))
 
-    new_access_token = auth.create_access_token(
-        uid=payload.sub, scopes=user.scopes.split()
-    )
+    new_access_token = auth.create_access_token(uid=payload.sub, scopes=user.scope_list)
     return LoginResponse(access_token=new_access_token)
 
 

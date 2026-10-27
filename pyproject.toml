@@ -174,13 +174,13 @@ forbidden_modules = ["user.routes"]
 [[tool.importlinter.contracts]]
 name = "routes and services never touch the DB session"
 type = "forbidden"
-source_modules = ["*.routes", "*.services"]
+source_modules = ["*.routes", "*.services", "core.dead_letter.router", "core.dead_letter.service"]
 forbidden_modules = ["sqlalchemy", "core.database"]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "services and repositories never speak HTTP"
 type = "forbidden"
-source_modules = ["*.services", "*.repositories"]
+source_modules = ["*.services", "*.repositories", "core.dead_letter.service", "core.dead_letter.repository"]
 forbidden_modules = ["fastapi"]
 allow_indirect_imports = true

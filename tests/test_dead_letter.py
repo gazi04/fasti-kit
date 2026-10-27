@@ -12,6 +12,7 @@ from core.dead_letter.hook import record_dead_letter, record_dead_letter_job
 from core.dead_letter.model import DeadLetterJobModel
 from core.dead_letter.repository import DeadLetterJobRepository
 from core.dead_letter.service import DeadLetterJobService
+from core.exception import BadRequestError, ConflictError, EntityNotFoundError
 
 DLQ_URL = "/api/admin/tasks/dlq"
 
@@ -265,15 +266,35 @@ async def test_service_retry_rejects_a_second_attempt(db, monkeypatch) -> None:
     row = await _record(repo)
 
     await service.retry_job(row.id)
-    with pytest.raises(ValueError, match="already retried"):
+    with pytest.raises(ConflictError, match="already retried"):
         await service.retry_job(row.id)
 
     assert calls == [f"dlq-retry:{row.id}"]  # enqueue not called the second time
 
 
-async def test_service_retry_unknown_id_returns_none(db) -> None:
+async def test_service_retry_unknown_id_raises_not_found(db) -> None:
     service = DeadLetterJobService(DeadLetterJobRepository(db))
-    assert await service.retry_job(uuid4()) is None
+    with pytest.raises(EntityNotFoundError):
+        await service.retry_job(uuid4())
+
+
+async def test_service_get_and_delete_unknown_id_raise_not_found(db) -> None:
+    service = DeadLetterJobService(DeadLetterJobRepository(db))
+    with pytest.raises(EntityNotFoundError):
+        await service.get_job(uuid4())
+    with pytest.raises(EntityNotFoundError):
+        await service.delete_job(uuid4())
+
+
+async def test_service_purge_requires_a_bound(db) -> None:
+    repo = DeadLetterJobRepository(db)
+    service = DeadLetterJobService(repo)
+    row = await _record(repo)
+
+    with pytest.raises(BadRequestError, match="bound the purge"):
+        await service.purge(only_retried=False)
+
+    assert await repo.get(row.id) is not None
 
 
 # ------------------------------------------------------------------------- router

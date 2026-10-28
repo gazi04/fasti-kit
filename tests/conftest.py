@@ -159,7 +159,7 @@ def query_counter(db_engine):
 
     Usage:
         async def test_my_endpoint(client, query_counter):
-            await client.get("/api/v1/user/list")
+            await client.get("/api/v1/users")
             assert query_counter["count"] <= 3
     """
     counter = {"count": 0}

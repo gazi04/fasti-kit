@@ -199,7 +199,7 @@ async def test_delete_user_deactivates_and_revokes_in_one_step(client, db) -> No
     user = await UserRepository(db).add("Delete Me", make_email(), "pw")
     headers = _bearer(user.id)
 
-    response = await client.delete("/api/v1/user/delete", headers=headers)
+    response = await client.delete("/api/v1/users/me", headers=headers)
 
     assert response.status_code == 200, response.text
     gone = await UserRepository(db).get(user.id)
@@ -208,7 +208,7 @@ async def test_delete_user_deactivates_and_revokes_in_one_step(client, db) -> No
 
 
 async def test_delete_user_for_unknown_user_is_404(client, db) -> None:
-    response = await client.delete("/api/v1/user/delete", headers=_bearer(uuid.uuid4()))
+    response = await client.delete("/api/v1/users/me", headers=_bearer(uuid.uuid4()))
 
     assert response.status_code == 404
     assert (await db.scalars(select(RevokedTokenModel))).all() == []
@@ -220,7 +220,7 @@ async def test_create_user_then_update_conflict_is_409(client, db) -> None:
     other = await UserRepository(db).add("Other", make_email(), "pw")
 
     response = await client.patch(
-        "/api/v1/user/update", json={"email": taken}, headers=_bearer(other.id)
+        "/api/v1/users/me", json={"email": taken}, headers=_bearer(other.id)
     )
 
     assert response.status_code == 409

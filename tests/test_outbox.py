@@ -13,7 +13,7 @@ from core.setting import get_settings
 from user.models import UserModel
 from user.repositories.user_repository import UserRepository
 
-CREATE_URL = "/api/v1/user/create"
+CREATE_URL = "/api/v1/users"
 PAYLOAD = {"subject": "s", "recipients": ["a@example.com"], "body": "b"}
 
 

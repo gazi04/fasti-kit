@@ -1,7 +1,7 @@
 """
 Regression tests for the two-transaction signup bug.
 
-POST /user/create used to commit the user row, then commit the verification
+POST /users used to commit the user row, then commit the verification
 jti separately. A failure on the second write left the account existing,
 unverified, with a NULL jti — and the caller's retry hit 409 with no route
 back except /resend-verification. Both writes now share one transaction.
@@ -16,12 +16,12 @@ from core.outbox.repository import OutboxRepository
 from user.models import UserModel
 from user.repositories.user_repository import UserRepository
 
-CREATE_URL = "/api/v1/user/create"
+CREATE_URL = "/api/v1/users"
 
 
 @pytest.fixture(autouse=True)
 def _disable_rate_limit():
-    """/user/create is capped at 5/minute against a shared Redis store, so
+    """POST /users is capped at 5/minute against a shared Redis store, so
     several signups in one suite run would 429. The cap itself is covered by
     tests/test_problem_details.py."""
     from core.limiter import limiter

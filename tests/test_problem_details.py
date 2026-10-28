@@ -33,7 +33,7 @@ async def test_unknown_route_is_problem_json(client: AsyncClient) -> None:
 
 
 async def test_auth_error_is_problem_json(client: AsyncClient) -> None:
-    body = _assert_problem(await client.get("/api/v1/user/get"), 401)
+    body = _assert_problem(await client.get("/api/v1/users/me"), 401)
     assert body["type"] == "about:blank"
     assert body["title"] == "Unauthorized"
 
@@ -46,7 +46,7 @@ async def test_auth_error_is_problem_json(client: AsyncClient) -> None:
     ],
 )
 async def test_validation_error_sanitized(client: AsyncClient, payload: dict) -> None:
-    body = _assert_problem(await client.post("/api/v1/user/create", json=payload), 422)
+    body = _assert_problem(await client.post("/api/v1/users", json=payload), 422)
     assert body["invalid_params"]
     assert all({"name", "reason", "code"} <= e.keys() for e in body["invalid_params"])
     raw = str(body)

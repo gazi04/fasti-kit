@@ -12,7 +12,6 @@ from auth.dependencies import (
     auth,
     get_auth_service,
     get_auth_session,
-    require_scopes,
 )
 from auth.entities.auth_session import AuthSession
 from auth.schemas.auth_schema import (
@@ -23,11 +22,10 @@ from auth.schemas.auth_schema import (
     ResetPasswordRequest,
 )
 from auth.services.auth_service import AuthService
-from core.deprecation import DeprecationRoute, deprecated
 from core.limiter import limiter
 from core.openapi import problem_responses
 
-auth_router = APIRouter(prefix="/auth", tags=["Auth"], route_class=DeprecationRoute)
+auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @auth_router.post("/login", responses=problem_responses(401, 422, 500))
@@ -46,13 +44,6 @@ async def login(
     auth.set_refresh_cookies(refresh_token, response)
 
     return LoginResponse(access_token=token)
-
-
-@auth_router.get("/protected")
-async def protected(
-    payload: TokenPayload = Depends(require_scopes("admin:read")),
-):
-    return {"user": payload.sub}
 
 
 @auth_router.post("/refresh")
@@ -132,15 +123,3 @@ async def reset_password(
 ) -> dict:
     await service.reset_password(data.token, data.new_password)
     return {"message": "Password has been reset"}
-
-
-@auth_router.get("/deprecated-endpoint")
-@deprecated(sunset="Sat, 01 Jan 2027 00:00:00 GMT")
-async def deprecated_endpoint():
-    """
-    Handles legacy authentication.
-
-    **SUNSET DATE:** Sat, 01 Jan 2027 00:00:00 GMT - Please migrate
-    to /api/v1/auth/refresh.
-    """
-    ...

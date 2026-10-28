@@ -35,11 +35,8 @@ import main
 
 paths = set(main.app.openapi()["paths"])
 expected = {
-    "/api/v1/product/create",
-    "/api/v1/product/get/{id}",
-    "/api/v1/product/update/{id}",
-    "/api/v1/product/delete/{id}",
-    "/api/v1/product/list",
+    "/api/v1/products",
+    "/api/v1/products/{id}",
 }
 missing = expected - paths
 assert not missing, f"routes not mounted: {sorted(missing)}"

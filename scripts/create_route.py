@@ -19,7 +19,7 @@ from scripts._boilerplate import (
 def generate_route(domain: str, name: str, fields: str = "") -> list[Path]:
     snake, pascal = resolve_names(domain, name)
     route_var = f"{snake}_router"
-    prefix = snake.replace("_", "-")
+    prefix = pluralize(snake).replace("_", "-")
 
     layer_dir = Path(domain) / "routes"
     file_path = layer_dir / f"{route_var}.py"
@@ -47,7 +47,7 @@ requires_access_token = [
 
 
 @{route_var}.post(
-    "/create", response_model={pascal}Response, dependencies=requires_access_token
+    "", response_model={pascal}Response, dependencies=requires_access_token
 )
 async def create_{snake}(
     data: Create{pascal}Request,
@@ -56,7 +56,7 @@ async def create_{snake}(
     return await service.create(data)
 
 
-@{route_var}.get("/get/{{id}}", response_model={pascal}Response)
+@{route_var}.get("/{{id}}", response_model={pascal}Response)
 async def get_{snake}(
     id: UUID,
     service: {pascal}Service = Depends(get_{snake}_service),
@@ -65,7 +65,7 @@ async def get_{snake}(
 
 
 @{route_var}.patch(
-    "/update/{{id}}", response_model={pascal}Response, dependencies=requires_access_token
+    "/{{id}}", response_model={pascal}Response, dependencies=requires_access_token
 )
 async def update_{snake}(
     id: UUID,
@@ -75,7 +75,7 @@ async def update_{snake}(
     return await service.update(id, data)
 
 
-@{route_var}.delete("/delete/{{id}}", dependencies=requires_access_token)
+@{route_var}.delete("/{{id}}", dependencies=requires_access_token)
 async def delete_{snake}(
     id: UUID,
     service: {pascal}Service = Depends(get_{snake}_service),
@@ -85,7 +85,7 @@ async def delete_{snake}(
     return {{"message": "{pascal} deleted"}}
 
 
-@{route_var}.get("/list", response_model=CursorPage[{pascal}Response])
+@{route_var}.get("", response_model=CursorPage[{pascal}Response])
 async def list_{pluralize(snake)}(
     params: CursorParams = Depends(),
     service: {pascal}Service = Depends(get_{snake}_service),

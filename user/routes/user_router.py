@@ -22,10 +22,10 @@ from user.schemas.user_schema import (
 )
 from user.services.user_service import UserService
 
-user_router = APIRouter(prefix="/user", tags=["User"])
+user_router = APIRouter(prefix="/users", tags=["User"])
 
 
-@user_router.post("/create", response_model=UserResponse)
+@user_router.post("", response_model=UserResponse)
 @limiter.limit("5/minute")
 async def create_user(
     data: CreateUserRequest,
@@ -35,14 +35,14 @@ async def create_user(
     return await service.register(data)
 
 
-@user_router.get("/get", response_model=UserResponse)
+@user_router.get("/me", response_model=UserResponse)
 async def get_user(
     user: User = Depends(get_current_user),
 ) -> User:
     return user
 
 
-@user_router.patch("/update", response_model=UserResponse)
+@user_router.patch("/me", response_model=UserResponse)
 async def update_user(
     data: UpdateUserRequest,
     service: UserService = Depends(get_user_service),
@@ -53,7 +53,7 @@ async def update_user(
     return await service.update(UUID(payload.sub), data)
 
 
-@user_router.delete("/delete")
+@user_router.delete("/me")
 async def delete_user(
     response: Response,
     service: AuthService = Depends(get_auth_service),
@@ -65,7 +65,7 @@ async def delete_user(
     return {"message": "User deleted"}
 
 
-@user_router.get("/list", response_model=CursorPage[UserResponse])
+@user_router.get("", response_model=CursorPage[UserResponse])
 async def list_users(
     params: CursorParams = Depends(),
     service: UserService = Depends(get_user_service),

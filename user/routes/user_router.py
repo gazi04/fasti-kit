@@ -9,7 +9,12 @@ from fastapi import (
 )
 from fastapi_pagination.cursor import CursorPage, CursorParams
 
-from auth.dependencies import auth, get_auth_service, get_auth_session
+from auth.dependencies import (
+    auth,
+    get_auth_service,
+    get_auth_session,
+    require_scopes,
+)
 from auth.entities.auth_session import AuthSession
 from auth.services.auth_service import AuthService
 from core.limiter import limiter
@@ -65,12 +70,13 @@ async def delete_user(
     return {"message": "User deleted"}
 
 
-@user_router.get("", response_model=CursorPage[UserResponse])
+@user_router.get(
+    "",
+    response_model=CursorPage[UserResponse],
+    dependencies=[Depends(require_scopes("admin:read"))],
+)
 async def list_users(
     params: CursorParams = Depends(),
     service: UserService = Depends(get_user_service),
-    payload: TokenPayload = Depends(
-        auth.token_required(type="access", locations=["headers"])
-    ),
 ) -> CursorPage[User]:
     return await service.list(params)

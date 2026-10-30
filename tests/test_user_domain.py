@@ -260,3 +260,40 @@ async def test_get_current_user_raises_403_for_deactivated_user(db) -> None:
         await get_current_user(user_repo=repo, payload=_payload_for(created.id))
 
     assert exc_info.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# GET /users - admin-only listing
+# ---------------------------------------------------------------------------
+
+LIST_URL = "/api/v1/users"
+
+
+def _bearer(scopes: list[str]) -> dict[str, str]:
+    token = auth.create_access_token(uid=str(uuid.uuid4()), scopes=scopes)
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def test_list_users_requires_token(client) -> None:
+    response = await client.get(LIST_URL)
+
+    assert response.status_code == 401
+
+
+async def test_list_users_rejects_default_user_scopes(client) -> None:
+    response = await client.get(
+        LIST_URL, headers=_bearer(["users:read", "users:write"])
+    )
+
+    assert response.status_code == 403
+    assert response.json()["type"] == "errors/unauthorized-action"
+    assert response.json()["detail"] == "Insufficient permissions"
+
+
+async def test_list_users_allows_admin_read_scope(client, db) -> None:
+    created = await UserRepository(db).add("Ola Listed", make_email(), "pw")
+
+    response = await client.get(LIST_URL, headers=_bearer(["admin:read"]))
+
+    assert response.status_code == 200
+    assert str(created.id) in {item["id"] for item in response.json()["items"]}

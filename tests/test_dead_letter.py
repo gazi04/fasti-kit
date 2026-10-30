@@ -312,6 +312,8 @@ async def _fake_enqueue(*args, **kwargs):
 async def test_router_requires_admin_read_scope(client) -> None:
     unscoped = await client.get(DLQ_URL, headers=_admin_headers())
     assert unscoped.status_code == 403
+    assert unscoped.json()["type"] == "errors/unauthorized-action"
+    assert unscoped.json()["detail"] == "Insufficient permissions"
 
     scoped = await client.get(DLQ_URL, headers=_admin_headers(["admin:read"]))
     assert scoped.status_code == 200

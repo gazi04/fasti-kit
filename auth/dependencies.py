@@ -3,7 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from authx import AuthX, AuthXConfig, JWTDecodeError, TokenPayload
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entities.auth_session import AuthSession, TokenRef
@@ -11,6 +11,7 @@ from auth.repositories.account_repository import AccountRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.services.auth_service import AuthService
 from core.database import AsyncSessionLocal, get_db
+from core.exception import UnauthorizedActionError
 from core.setting import get_settings
 from user.repositories.user_repository import UserRepository
 
@@ -89,7 +90,7 @@ def require_scopes(*required: str, all_required: bool = True):
         ),
     ) -> TokenPayload:
         if not payload.has_scopes(*required, all_required=all_required):
-            raise HTTPException(403, detail="Insufficient permissions")
+            raise UnauthorizedActionError("Insufficient permissions")
         return payload
 
     return _check

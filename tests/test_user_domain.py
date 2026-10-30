@@ -9,10 +9,13 @@ import uuid
 
 import pytest
 from authx import TokenPayload
-from fastapi import HTTPException
 
 from auth.dependencies import auth
-from core.exception import ConflictError
+from core.exception import (
+    ConflictError,
+    EntityNotFoundError,
+    UnauthorizedActionError,
+)
 from core.factories.user_factory import (
     CreateUserRequestFactory,
     UpdateUserRequestFactory,
@@ -287,7 +290,7 @@ async def test_get_current_user_returns_active_user(db) -> None:
 async def test_get_current_user_raises_404_for_unknown_sub(db) -> None:
     repo = UserRepository(db)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(EntityNotFoundError) as exc_info:
         await get_current_user(user_repo=repo, payload=_payload_for(uuid.uuid4()))
 
     assert exc_info.value.status_code == 404
@@ -298,7 +301,7 @@ async def test_get_current_user_raises_403_for_deactivated_user(db) -> None:
     created = await repo.add("Nina Deleted", make_email(), "pw")
     await repo.update(created.id, is_active=False)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(UnauthorizedActionError) as exc_info:
         await get_current_user(user_repo=repo, payload=_payload_for(created.id))
 
     assert exc_info.value.status_code == 403

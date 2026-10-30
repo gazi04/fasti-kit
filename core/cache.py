@@ -73,7 +73,7 @@ def cache(
 
             # Execute Redis writes atomically
             async with redis.pipeline() as pipe:
-                pipe.setex(cache_key, actual_ttl, json_data)
+                pipe.set(cache_key, json_data, ex=actual_ttl)
 
                 if tags:
                     for tag in tags:

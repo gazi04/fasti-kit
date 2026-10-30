@@ -15,7 +15,6 @@ from auth.services.email_verification_service import (
 )
 from auth.services.password_reset_service import RESET_TYPE, PasswordResetService
 from auth.services.security_service import SecurityService
-from core.cache import invalidate_tags
 from core.exception import ConflictError, EntityNotFoundError
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
@@ -56,8 +55,6 @@ class AuthService:
 
         if user is None:
             raise EntityNotFoundError("User", str(user_id))
-
-        await invalidate_tags("users")
 
     async def verify_email(self, token: str) -> None:
         payload = await self._decode(

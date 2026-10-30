@@ -185,25 +185,6 @@ async def test_service_register_hashes_password(db) -> None:
     assert user.password_hash.startswith("$2b$")
 
 
-async def test_service_get_returns_user(db) -> None:
-    """get() delegates to the repository and returns an entity."""
-    repo = UserRepository(db)
-    service = UserService(repo)
-    email = make_email()
-    created = await repo.add("Henry Get", email, "pw")
-
-    fetched = await service.get(created.id)
-    assert fetched is not None
-    assert fetched.id == created.id
-
-
-async def test_service_get_returns_none_for_missing(db) -> None:
-    """get() returns None when user is not found."""
-    service = UserService(UserRepository(db))
-    result = await service.get(uuid.uuid4())
-    assert result is None
-
-
 async def test_service_update_hashes_new_password(db) -> None:
     """update() hashes a new password via SecurityService before persisting."""
     repo = UserRepository(db)
@@ -229,32 +210,6 @@ async def test_service_update_skips_password_when_none(db) -> None:
     updated = await service.update(created.id, data)
     assert updated is not None
     assert updated.full_name == "Jack Updated"
-
-
-async def test_service_delete_soft(db) -> None:
-    """delete() (no force) soft-deletes the user."""
-    repo = UserRepository(db)
-    service = UserService(repo)
-    email = make_email()
-    created = await repo.add("Karen Del", email, "pw")
-
-    deleted = await service.delete(created.id)
-    assert deleted is not None
-    assert deleted.is_active is False
-
-
-async def test_service_force_delete(db) -> None:
-    """delete(force=True) calls force_delete and removes the row."""
-    repo = UserRepository(db)
-    service = UserService(repo)
-    email = make_email()
-    created = await repo.add("Leo Force", email, "pw")
-
-    result = await service.delete(created.id, force=True)
-    assert result is not None
-
-    gone = await repo.get(created.id)
-    assert gone is None
 
 
 # ---------------------------------------------------------------------------

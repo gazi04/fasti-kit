@@ -4,7 +4,6 @@ from fastapi_pagination.cursor import CursorPage, CursorParams
 
 from auth.services.email_verification_service import EmailVerificationService
 from auth.services.security_service import SecurityService
-from core.cache import cache, invalidate_tags
 from core.exception import EntityNotFoundError
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
@@ -33,10 +32,6 @@ class UserService:
             ),
         )
 
-    @cache(ttl=3600, tags=["users"])
-    async def get(self, user_id: UUID) -> User | None:
-        return await self.repo.get(user_id)
-
     async def list(self, params: CursorParams | None = None) -> CursorPage[User]:
         return await self.repo.list(params)
 
@@ -49,18 +44,5 @@ class UserService:
 
         if result is None:
             raise EntityNotFoundError("User", str(user_id))
-
-        await invalidate_tags("users")
-
-        return result
-
-    async def delete(self, user_id: UUID, force: bool = False) -> User | None:
-        if force:
-            result = await self.repo.force_delete(user_id)
-        else:
-            result = await self.repo.delete(user_id)
-
-        if result:
-            await invalidate_tags("users")
 
         return result

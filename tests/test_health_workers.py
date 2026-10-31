@@ -6,7 +6,8 @@ from httpx import AsyncClient
 
 from core import health
 from core.outbox.model import OutboxEvent
-from core.outbox.relay import RELAY_HEARTBEAT_KEY, oldest_pending_age, relay_loop
+from core.outbox.relay import RELAY_HEARTBEAT_KEY, relay_loop
+from core.outbox.repository import OutboxRepository
 from core.queue import redis, task_queue
 
 
@@ -89,14 +90,14 @@ class _Ctx:
 
 
 async def test_oldest_pending_age_is_none_when_empty(db) -> None:
-    assert await oldest_pending_age(db) is None
+    assert await OutboxRepository(db).oldest_pending_age() is None
 
 
 async def test_oldest_pending_age_reports_oldest_pending_row(db) -> None:
     await _add_event(db, age_seconds=10)
     await _add_event(db, age_seconds=300)
 
-    age = await oldest_pending_age(db)
+    age = await OutboxRepository(db).oldest_pending_age()
 
     assert age is not None
     assert 299 <= age < 310
@@ -107,37 +108,41 @@ async def test_oldest_pending_age_ignores_dispatched_and_failed(db) -> None:
     await _add_event(db, age_seconds=500, dispatched_at=now)
     await _add_event(db, age_seconds=500, failed_at=now)
 
-    assert await oldest_pending_age(db) is None
+    assert await OutboxRepository(db).oldest_pending_age() is None
 
 
-async def test_backlog_check_fails_when_lag_exceeds_limit(monkeypatch) -> None:
-    async def stale(db):
-        return 120.0
+async def test_backlog_check_fails_when_lag_exceeds_limit(db) -> None:
+    await _add_event(db, age_seconds=120)
 
-    monkeypatch.setattr(health, "oldest_pending_age", stale)
-
-    with pytest.raises(RuntimeError, match="120s old"):
-        await health._check_outbox_backlog()
+    with pytest.raises(RuntimeError, match=r"1[12]\ds old"):
+        await health._check_outbox_backlog(OutboxRepository(db))
 
 
-async def test_backlog_check_passes_when_empty_or_fresh(monkeypatch) -> None:
-    for age in (None, 5.0):
+async def test_backlog_check_passes_when_empty_or_fresh(db) -> None:
+    outbox = OutboxRepository(db)
+    await health._check_outbox_backlog(outbox)
 
-        async def fake(db, age=age):
-            return age
-
-        monkeypatch.setattr(health, "oldest_pending_age", fake)
-        await health._check_outbox_backlog()
+    await _add_event(db, age_seconds=5)
+    await health._check_outbox_backlog(outbox)
 
 
-def _stub_checks(monkeypatch, *, fail: str | None) -> None:
-    async def ok() -> None:
+def _stub_checks(
+    monkeypatch,
+    *,
+    fail: str | None,
+    names: tuple[str, ...] = (
+        "_check_worker",
+        "_check_relay_heartbeat",
+        "_check_outbox_backlog",
+    ),
+) -> None:
+    async def ok(*args) -> None:
         return None
 
-    async def bad() -> None:
+    async def bad(*args) -> None:
         raise RuntimeError("boom")
 
-    for name in ("_check_worker", "_check_relay_heartbeat", "_check_outbox_backlog"):
+    for name in names:
         monkeypatch.setattr(health, name, bad if name == fail else ok)
 
 
@@ -173,3 +178,23 @@ async def test_ready_does_not_probe_workers(client: AsyncClient, monkeypatch) ->
     response = await client.get("/health/ready")
 
     assert "worker" not in response.json()["checks"]
+
+
+async def test_workers_endpoint_reports_a_stale_outbox_backlog(
+    client: AsyncClient, db, monkeypatch
+) -> None:
+    _stub_checks(
+        monkeypatch, fail=None, names=("_check_worker", "_check_relay_heartbeat")
+    )
+
+    fresh = await client.get("/health/workers")
+    assert fresh.status_code == 200, fresh.text
+    assert fresh.json()["checks"]["outbox_backlog"] == "ok"
+
+    await _add_event(db, age_seconds=120)
+
+    stale = await client.get("/health/workers")
+    assert stale.status_code == 503, stale.text
+    assert stale.json()["checks"]["outbox_backlog"].startswith(
+        "unhealthy: oldest pending outbox row is 1"
+    )

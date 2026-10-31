@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import AsyncSessionLocal, force_primary_var
@@ -75,19 +75,6 @@ async def cleanup_dispatched(db: AsyncSession) -> int:
     )
     await db.commit()
     return len(deleted.scalars().all())
-
-
-async def oldest_pending_age(db: AsyncSession) -> float | None:
-    force_primary_var.set(True)
-    oldest = await db.scalar(
-        select(func.min(OutboxEvent.created_at)).where(
-            OutboxEvent.dispatched_at.is_(None),
-            OutboxEvent.failed_at.is_(None),
-        )
-    )
-    if oldest is None:
-        return None
-    return (datetime.now(UTC) - oldest).total_seconds()
 
 
 async def relay_loop() -> None:

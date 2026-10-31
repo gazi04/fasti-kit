@@ -2,11 +2,13 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Mapping
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 
-from core.database import AsyncSessionLocal, primary_engine, replica_engine
-from core.outbox.relay import RELAY_HEARTBEAT_KEY, oldest_pending_age
+from core.database import primary_engine, replica_engine
+from core.outbox.dependencies import get_outbox_repository
+from core.outbox.relay import RELAY_HEARTBEAT_KEY
+from core.outbox.repository import OutboxRepository
 from core.queue import redis, task_queue
 from core.setting import get_settings
 
@@ -42,9 +44,8 @@ async def _check_relay_heartbeat() -> None:
         raise RuntimeError("outbox relay heartbeat missing")
 
 
-async def _check_outbox_backlog() -> None:
-    async with AsyncSessionLocal() as db:
-        age = await oldest_pending_age(db)
+async def _check_outbox_backlog(outbox: OutboxRepository) -> None:
+    age = await outbox.oldest_pending_age()
     max_lag = get_settings().outbox_max_lag_seconds
     if age is not None and age > max_lag:
         raise RuntimeError(f"oldest pending outbox row is {age:.0f}s old")
@@ -97,7 +98,10 @@ async def readiness(response: Response) -> dict:
 
 
 @health_router.get("/workers")
-async def workers(response: Response) -> dict:
+async def workers(
+    response: Response,
+    outbox: OutboxRepository = Depends(get_outbox_repository),
+) -> dict:
     """Validates the SAQ worker is up and the outbox relay is alive and keeping up.
 
     Kept apart from /ready so a dead worker does not pull API instances out of rotation.
@@ -106,7 +110,7 @@ async def workers(response: Response) -> dict:
         {
             "worker": _check_worker(),
             "outbox_relay": _check_relay_heartbeat(),
-            "outbox_backlog": _check_outbox_backlog(),
+            "outbox_backlog": _check_outbox_backlog(outbox),
         },
         response,
     )

@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
+from authx import TokenPayload
 from sqlalchemy import select
 
 from auth.dependencies import auth
@@ -262,3 +263,141 @@ async def test_service_refresh_requires_an_active_verified_user(db) -> None:
 
     with pytest.raises(InvalidCredentialsError):
         await service.refresh(uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/refresh over HTTP: refresh cookie, CSRF check, blocklist
+# ---------------------------------------------------------------------------
+
+LOGIN_URL = "/api/v1/auth/login"
+REFRESH_URL = "/api/v1/auth/refresh"
+REFRESH_COOKIE = auth.config.JWT_REFRESH_COOKIE_NAME
+CSRF_COOKIE = auth.config.JWT_REFRESH_CSRF_COOKIE_NAME
+CSRF_HEADER = auth.config.JWT_REFRESH_CSRF_HEADER_NAME
+
+
+async def _log_in(client, db):
+    repo = UserRepository(db)
+    user = await repo.add(
+        "Refresh User", make_email(), SecurityService.hash_password("pw")
+    )
+    await repo.update(user.id, is_verified=True)
+
+    response = await client.post(
+        LOGIN_URL, json={"email": user.email, "password": "pw"}
+    )
+    assert response.status_code == 200, response.text
+    return user, response
+
+
+def _keep_refresh_cookies(client, login_response) -> str:
+    refresh_token = login_response.cookies[REFRESH_COOKIE]
+    csrf = login_response.cookies[CSRF_COOKIE]
+    client.cookies.clear()
+    client.cookies.set(REFRESH_COOKIE, refresh_token)
+    client.cookies.set(CSRF_COOKIE, csrf)
+    return csrf
+
+
+def _decode(token: str) -> TokenPayload:
+    settings = get_settings()
+    return TokenPayload.decode(
+        token,
+        key=settings.jwt_secret_key,
+        algorithms=[settings.jwt_algorithm],
+        verify=True,
+    )
+
+
+async def test_refresh_issues_a_working_access_token(client, db) -> None:
+    user, login = await _log_in(client, db)
+    csrf = _keep_refresh_cookies(client, login)
+
+    response = await client.post(REFRESH_URL, headers={CSRF_HEADER: csrf})
+
+    assert response.status_code == 200, response.text
+    access_token = response.json()["access_token"]
+    payload = _decode(access_token)
+    assert payload.sub == str(user.id)
+    assert payload.type == "access"
+    assert payload.scopes == user.scope_list
+
+    me = await client.get(
+        "/api/v1/users/me", headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert me.status_code == 200, me.text
+    assert me.json()["id"] == str(user.id)
+
+
+async def test_refresh_picks_up_scopes_granted_after_login(client, db) -> None:
+    user, login = await _log_in(client, db)
+    csrf = _keep_refresh_cookies(client, login)
+    await UserRepository(db).update(user.id, scopes="users:read admin:read")
+
+    response = await client.post(REFRESH_URL, headers={CSRF_HEADER: csrf})
+
+    assert response.status_code == 200, response.text
+    assert _decode(response.json()["access_token"]).scopes == [
+        "users:read",
+        "admin:read",
+    ]
+
+
+async def test_refresh_requires_the_csrf_header(client, db) -> None:
+    _, login = await _log_in(client, db)
+    _keep_refresh_cookies(client, login)
+
+    response = await client.post(REFRESH_URL)
+
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"].startswith("Missing CSRF token")
+
+
+async def test_refresh_rejects_a_mismatched_csrf_header(client, db) -> None:
+    _, login = await _log_in(client, db)
+    _keep_refresh_cookies(client, login)
+
+    response = await client.post(REFRESH_URL, headers={CSRF_HEADER: "forged"})
+
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"].startswith("CSRF token mismatch")
+
+
+async def test_refresh_ignores_an_access_token_in_the_header(client, db) -> None:
+    _, login = await _log_in(client, db)
+    client.cookies.clear()
+
+    response = await client.post(
+        REFRESH_URL,
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"].startswith("Missing cookie")
+
+
+async def test_refresh_rejects_a_token_revoked_by_logout(client, db) -> None:
+    _, login = await _log_in(client, db)
+    csrf = _keep_refresh_cookies(client, login)
+    logout = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert logout.status_code == 200, logout.text
+    _keep_refresh_cookies(client, login)
+
+    response = await client.post(REFRESH_URL, headers={CSRF_HEADER: csrf})
+
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"].startswith("Token has been revoked")
+
+
+async def test_refresh_rejects_a_user_deactivated_after_login(client, db) -> None:
+    user, login = await _log_in(client, db)
+    csrf = _keep_refresh_cookies(client, login)
+    await UserRepository(db).delete(user.id)
+
+    response = await client.post(REFRESH_URL, headers={CSRF_HEADER: csrf})
+
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"] == "Invalid credentials"

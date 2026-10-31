@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -72,6 +73,8 @@ async def test_relay_loop_writes_heartbeat(db, monkeypatch, clean_heartbeat) -> 
             await asyncio.sleep(0.05)
     finally:
         task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
     assert await redis.exists(RELAY_HEARTBEAT_KEY)
     ttl = await redis.ttl(RELAY_HEARTBEAT_KEY)

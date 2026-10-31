@@ -1,7 +1,7 @@
 [project]
 name = "fasti-kit"
 version = "0.1.0"
-description = "Add your description here"
+description = "FastAPI starter kit with a DDD scaffolding CLI, RFC 7807 errors, primary/replica routing and background jobs"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

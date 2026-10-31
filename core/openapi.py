@@ -18,6 +18,7 @@ def custom_openapi(app: FastAPI) -> dict[str, Any]:
         title=app.title,
         version=app.version,
         openapi_version=app.openapi_version,
+        summary=app.summary,
         description=app.description,
         routes=app.routes,
     )

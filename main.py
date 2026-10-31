@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from importlib.metadata import metadata
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,7 +59,13 @@ async def lifespan(app: FastAPI):
                 logger.exception("Failed to release %s cleanly on shutdown", label)
 
 
-app = FastAPI(title="Title", lifespan=lifespan)
+project = metadata("fasti-kit")
+app = FastAPI(
+    title=project["Name"],
+    summary=project["Summary"],
+    version=project["Version"],
+    lifespan=lifespan,
+)
 app.state.limiter = limiter
 install_problem_handlers(app)
 install_auth_error_handlers(app)

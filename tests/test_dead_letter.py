@@ -13,6 +13,9 @@ from core.dead_letter.model import DeadLetterJobModel
 from core.dead_letter.repository import DeadLetterJobRepository
 from core.dead_letter.service import DeadLetterJobService
 from core.exception import BadRequestError, ConflictError, EntityNotFoundError
+from core.outbox import relay
+from core.outbox.model import OutboxEvent
+from core.outbox.repository import OutboxRepository
 
 DLQ_URL = "/api/admin/tasks/dlq"
 
@@ -185,13 +188,79 @@ async def test_repo_get_hit_and_miss(db) -> None:
     assert await repo.get(uuid4()) is None
 
 
-async def test_repo_mark_retried_sets_timestamp(db) -> None:
+async def _outbox_events(db) -> list[OutboxEvent]:
+    return list((await db.scalars(select(OutboxEvent))).all())
+
+
+async def test_repo_retry_marks_the_row_and_stages_one_outbox_event(db) -> None:
+    repo = DeadLetterJobRepository(db)
+    row = await _record(repo, kwargs={"recipients": ["x@example.com"]})
+    before = await _outbox_events(db)
+
+    retried = await repo.retry(row.id)
+
+    assert retried is not None
+    assert retried.retried_at is not None
+    staged = [e for e in await _outbox_events(db) if e not in before]
+    assert [(e.task_name, e.payload) for e in staged] == [
+        ("send_email_task", {"kwargs": {"recipients": ["x@example.com"]}})
+    ]
+
+
+async def test_repo_retry_claims_a_row_only_once(db) -> None:
     repo = DeadLetterJobRepository(db)
     row = await _record(repo)
-    updated = await repo.mark_retried(row.id)
-    assert updated is not None
-    assert updated.retried_at is not None
-    assert await repo.mark_retried(uuid4()) is None
+
+    assert await repo.retry(row.id) is not None
+    after_first = len(await _outbox_events(db))
+
+    assert await repo.retry(row.id) is None
+    assert len(await _outbox_events(db)) == after_first
+    assert await repo.retry(uuid4()) is None
+
+
+async def test_repo_retry_leaves_the_row_unclaimed_when_staging_fails(
+    db, monkeypatch
+) -> None:
+    repo = DeadLetterJobRepository(db)
+    row = await _record(repo)
+    before = len(await _outbox_events(db))
+
+    async def _boom(self, task_name, payload):
+        raise RuntimeError("outbox down")
+
+    monkeypatch.setattr(OutboxRepository, "stage_add", _boom)
+
+    with pytest.raises(RuntimeError, match="outbox down"):
+        await repo.retry(row.id)
+
+    fresh = await repo.get(row.id, consistent=True)
+    assert fresh is not None and fresh.retried_at is None
+    assert len(await _outbox_events(db)) == before
+
+
+async def test_relay_hands_the_stored_kwargs_to_the_original_task(
+    db, monkeypatch
+) -> None:
+    calls: list[tuple[str, str, dict]] = []
+
+    async def _fake_enqueue(task_name, *, key, **kwargs):
+        calls.append((task_name, key, kwargs))
+
+    monkeypatch.setattr(relay, "enqueue_task", _fake_enqueue)
+    repo = DeadLetterJobRepository(db)
+    row = await _record(repo, kwargs={"timeout": 5, "key": "not-a-job-field"})
+    before = await _outbox_events(db)
+    await repo.retry(row.id)
+    (event,) = [e for e in await _outbox_events(db) if e not in before]
+
+    await relay.dispatch_pending(db, batch_size=100)
+
+    assert (
+        "send_email_task",
+        f"outbox:{event.id}",
+        {"kwargs": {"timeout": 5, "key": "not-a-job-field"}},
+    ) in calls
 
 
 async def test_repo_delete_reports_existence(db) -> None:
@@ -227,40 +296,17 @@ async def test_repo_purge_honours_filters(db) -> None:
 # ------------------------------------------------------------------------ service
 
 
-async def test_service_retry_enqueues_and_marks_retried(db, monkeypatch) -> None:
-    calls: list[dict] = []
-
-    async def _fake_enqueue(task_name, *, key, **kwargs):
-        calls.append({"task_name": task_name, "key": key, **kwargs})
-        return None
-
-    monkeypatch.setattr("core.dead_letter.service.enqueue_task", _fake_enqueue)
-
+async def test_service_retry_returns_the_claimed_job(db) -> None:
     repo = DeadLetterJobRepository(db)
-    service = DeadLetterJobService(repo)
-    row = await _record(repo, kwargs={"recipients": ["x@example.com"]})
+    row = await _record(repo)
 
-    result = await service.retry_job(row.id)
+    result = await DeadLetterJobService(repo).retry_job(row.id)
 
-    assert result is not None
+    assert result.id == row.id
     assert result.retried_at is not None
-    assert calls == [
-        {
-            "task_name": "send_email_task",
-            "key": f"dlq-retry:{row.id}",
-            "kwargs": {"recipients": ["x@example.com"]},
-        }
-    ]
 
 
-async def test_service_retry_rejects_a_second_attempt(db, monkeypatch) -> None:
-    calls: list = []
-
-    async def _fake_enqueue(task_name, *, key, **kwargs):
-        calls.append(key)
-
-    monkeypatch.setattr("core.dead_letter.service.enqueue_task", _fake_enqueue)
-
+async def test_service_retry_rejects_a_second_attempt(db) -> None:
     repo = DeadLetterJobRepository(db)
     service = DeadLetterJobService(repo)
     row = await _record(repo)
@@ -268,8 +314,6 @@ async def test_service_retry_rejects_a_second_attempt(db, monkeypatch) -> None:
     await service.retry_job(row.id)
     with pytest.raises(ConflictError, match="already retried"):
         await service.retry_job(row.id)
-
-    assert calls == [f"dlq-retry:{row.id}"]  # enqueue not called the second time
 
 
 async def test_service_retry_unknown_id_raises_not_found(db) -> None:
@@ -305,10 +349,6 @@ def _admin_headers(scopes: list[str] | None = None) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _fake_enqueue(*args, **kwargs):
-    return None
-
-
 async def test_router_requires_admin_read_scope(client) -> None:
     unscoped = await client.get(DLQ_URL, headers=_admin_headers())
     assert unscoped.status_code == 403
@@ -319,8 +359,7 @@ async def test_router_requires_admin_read_scope(client) -> None:
     assert scoped.status_code == 200
 
 
-async def test_router_lists_and_retries_and_purges(client, db, monkeypatch) -> None:
-    monkeypatch.setattr("core.dead_letter.service.enqueue_task", _fake_enqueue)
+async def test_router_lists_and_retries_and_purges(client, db) -> None:
     headers = _admin_headers(["admin:read"])
     row = await _record(DeadLetterJobRepository(db))
 
@@ -330,7 +369,7 @@ async def test_router_lists_and_retries_and_purges(client, db, monkeypatch) -> N
 
     retried = await client.post(f"{DLQ_URL}/{row.id}/retry", headers=headers)
     assert retried.status_code == 200
-    assert retried.json()["job_key"] == row.job_key
+    assert retried.json() == {"message": "queued for retry", "job_key": row.job_key}
 
     second = await client.post(f"{DLQ_URL}/{row.id}/retry", headers=headers)
     assert second.status_code == 409

@@ -4,17 +4,19 @@ from uuid import UUID
 
 from fastapi_pagination.cursor import CursorPage, CursorParams
 from fastapi_pagination.ext.sqlalchemy import apaginate
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import force_primary_var, transaction
 from core.dead_letter.entity import DeadLetterJob
 from core.dead_letter.model import DeadLetterJobModel
+from core.outbox.repository import OutboxRepository
 
 
 class DeadLetterJobRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db: AsyncSession = db
+        self._outbox = OutboxRepository(db)
 
     async def record(
         self,
@@ -59,7 +61,12 @@ class DeadLetterJobRepository:
             transformer=lambda models: [self._to_entity(model) for model in models],
         )
 
-    async def get(self, job_id: UUID) -> DeadLetterJob | None:
+    async def get(
+        self, job_id: UUID, *, consistent: bool = False
+    ) -> DeadLetterJob | None:
+        if consistent:
+            force_primary_var.set(True)
+
         model = await self.db.get(DeadLetterJobModel, job_id)
 
         if model is None:
@@ -67,17 +74,25 @@ class DeadLetterJobRepository:
 
         return self._to_entity(model)
 
-    async def mark_retried(self, job_id: UUID) -> DeadLetterJob | None:
+    async def retry(self, job_id: UUID) -> DeadLetterJob | None:
         force_primary_var.set(True)
-        model = await self.db.get(DeadLetterJobModel, job_id)
-
-        if model is None:
-            return None
+        claim = (
+            update(DeadLetterJobModel)
+            .where(
+                DeadLetterJobModel.id == job_id,
+                DeadLetterJobModel.retried_at.is_(None),
+            )
+            .values(retried_at=datetime.now(UTC))
+            .returning(DeadLetterJobModel)
+        )
 
         async with transaction(self.db):
-            model.retried_at = datetime.now(UTC)
-            await self.db.flush()
-            await self.db.refresh(model)
+            model = (await self.db.scalars(claim)).one_or_none()
+
+            if model is None:
+                return None
+
+            await self._outbox.stage_add(model.function, {"kwargs": model.kwargs})
             return self._to_entity(model)
 
     async def delete(self, job_id: UUID) -> bool:

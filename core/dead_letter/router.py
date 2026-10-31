@@ -40,7 +40,7 @@ async def retry_dead_letter_job(
 ):
     job = await service.retry_job(job_id)
 
-    return {"message": "re-enqueued", "job_key": job.job_key}
+    return {"message": "queued for retry", "job_key": job.job_key}
 
 
 @dlq_router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)

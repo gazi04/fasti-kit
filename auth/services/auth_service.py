@@ -120,7 +120,7 @@ class AuthService:
         try:
             await self.account_repo.reset_password(
                 user.id,
-                SecurityService.hash_password(new_password),
+                await SecurityService.hash_password(new_password),
                 payload["jti"],
                 self._expiry(payload),
             )

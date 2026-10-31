@@ -45,7 +45,7 @@ async def test_login_rejects_wrong_password(client, db) -> None:
     repo = UserRepository(db)
     email = make_email()
     user = await repo.add(
-        "Login Wrong Pw", email, SecurityService.hash_password("correct")
+        "Login Wrong Pw", email, await SecurityService.hash_password("correct")
     )
     await repo.update(user.id, is_verified=True)
 
@@ -57,7 +57,9 @@ async def test_login_rejects_wrong_password(client, db) -> None:
 async def test_login_rejects_unverified_user_with_correct_password(client, db) -> None:
     repo = UserRepository(db)
     email = make_email()
-    await repo.add("Login Unverified", email, SecurityService.hash_password("correct"))
+    await repo.add(
+        "Login Unverified", email, await SecurityService.hash_password("correct")
+    )
 
     response = await client.post(
         LOGIN_URL, json={"email": email, "password": "correct"}
@@ -70,7 +72,7 @@ async def test_login_rejects_inactive_user_with_correct_password(client, db) -> 
     repo = UserRepository(db)
     email = make_email()
     user = await repo.add(
-        "Login Inactive", email, SecurityService.hash_password("correct")
+        "Login Inactive", email, await SecurityService.hash_password("correct")
     )
     await repo.update(user.id, is_verified=True)
     await repo.delete(user.id)  # soft-delete -> is_active False
@@ -86,7 +88,7 @@ async def test_login_succeeds_for_active_verified_user(client, db) -> None:
     repo = UserRepository(db)
     email = make_email()
     user = await repo.add(
-        "Login Happy Path", email, SecurityService.hash_password("correct")
+        "Login Happy Path", email, await SecurityService.hash_password("correct")
     )
     await repo.update(user.id, is_verified=True)
 

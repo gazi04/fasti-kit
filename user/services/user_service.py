@@ -25,7 +25,7 @@ class UserService:
             id=user_id,
             full_name=data.name,
             email=data.email,
-            password_hash=SecurityService.hash_password(data.password),
+            password_hash=await SecurityService.hash_password(data.password),
             pending_verification_jti=jti,
             email_payload=EmailVerificationService.build_email_payload(
                 data.email, token
@@ -38,7 +38,7 @@ class UserService:
     async def update(self, user_id: UUID, data: UpdateUserRequest) -> User:
         fields = data.model_dump(exclude_unset=True, exclude={"password"})
         if data.password is not None:
-            fields["password_hash"] = SecurityService.hash_password(data.password)
+            fields["password_hash"] = await SecurityService.hash_password(data.password)
 
         result = await self.repo.update(id=user_id, **fields)
 

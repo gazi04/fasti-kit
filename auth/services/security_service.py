@@ -1,3 +1,4 @@
+import asyncio
 from uuid import uuid4
 
 from bcrypt import checkpw, gensalt, hashpw
@@ -6,14 +7,22 @@ from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 
 
+def _hash(password: str) -> str:
+    return hashpw(password.encode(), gensalt()).decode()
+
+
+def _check(password: str, hashed_password: str) -> bool:
+    return checkpw(password.encode(), hashed_password.encode())
+
+
 class SecurityService:
     @staticmethod
-    def hash_password(password: str) -> str:
-        return hashpw(password.encode(), gensalt()).decode()
+    async def hash_password(password: str) -> str:
+        return await asyncio.to_thread(_hash, password)
 
     @staticmethod
-    def check_password(password: str, hashed_password: str) -> bool:
-        return checkpw(password.encode(), hashed_password.encode())
+    async def check_password(password: str, hashed_password: str) -> bool:
+        return await asyncio.to_thread(_check, password, hashed_password)
 
     @staticmethod
     async def authenticate(
@@ -22,7 +31,7 @@ class SecurityService:
         user = await user_repository.get_by_email(email, consistent=True)
 
         password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
-        password_ok = SecurityService.check_password(password, password_hash)
+        password_ok = await SecurityService.check_password(password, password_hash)
 
         if (
             user is None
@@ -37,4 +46,4 @@ class SecurityService:
 # Precomputed once at import time so a login for a nonexistent/inactive/
 # unverified account still pays the same bcrypt cost as a real password
 # check — otherwise response timing leaks account-state to an attacker.
-_DUMMY_PASSWORD_HASH = SecurityService.hash_password(uuid4().hex)
+_DUMMY_PASSWORD_HASH = _hash(uuid4().hex)

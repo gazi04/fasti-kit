@@ -56,7 +56,7 @@ async def _seed(
         admin = await repo.add(
             full_name="Seed Admin",
             email=admin_email,
-            password_hash=SecurityService.hash_password(admin_password),
+            password_hash=await SecurityService.hash_password(admin_password),
         )
         await repo.update(
             admin.id, is_verified=True, is_active=True, scopes=ADMIN_SCOPES
@@ -69,7 +69,7 @@ async def _seed(
         user = await repo.add(
             full_name=request.name,
             email=request.email,
-            password_hash=SecurityService.hash_password(request.password),
+            password_hash=await SecurityService.hash_password(request.password),
         )
         await repo.update(user.id, is_verified=True, is_active=True)
 
@@ -78,7 +78,7 @@ async def _seed(
         await repo.add(
             full_name=request.name,
             email=request.email,
-            password_hash=SecurityService.hash_password(request.password),
+            password_hash=await SecurityService.hash_password(request.password),
         )
 
     typer.echo(

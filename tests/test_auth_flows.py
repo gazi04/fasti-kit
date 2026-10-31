@@ -48,7 +48,7 @@ def _service(db) -> AuthService:
 async def _unverified_user(db):
     repo = UserRepository(db)
     user = await repo.add(
-        "Flow User", make_email(), SecurityService.hash_password("pw")
+        "Flow User", make_email(), await SecurityService.hash_password("pw")
     )
     token, jti = EmailVerificationService.create_verification_token(str(user.id))
     await repo.update(user.id, pending_verification_jti=jti)
@@ -58,7 +58,7 @@ async def _unverified_user(db):
 async def _user_awaiting_reset(db):
     repo = UserRepository(db)
     user = await repo.add(
-        "Reset User", make_email(), SecurityService.hash_password("old")
+        "Reset User", make_email(), await SecurityService.hash_password("old")
     )
     token, jti = PasswordResetService.create_reset_token(str(user.id))
     await repo.update(user.id, pending_password_reset_jti=jti, is_verified=True)
@@ -131,7 +131,7 @@ async def test_reset_password_changes_hash_and_burns_the_token(client, db) -> No
     assert response.status_code == 200, response.text
     updated = await UserRepository(db).get(user.id)
     assert updated is not None
-    assert SecurityService.check_password("brand-new-pw", updated.password_hash)
+    assert await SecurityService.check_password("brand-new-pw", updated.password_hash)
     assert await RevokedTokenRepository(db).exists(jti) is True
 
 
@@ -279,7 +279,7 @@ CSRF_HEADER = auth.config.JWT_REFRESH_CSRF_HEADER_NAME
 async def _log_in(client, db):
     repo = UserRepository(db)
     user = await repo.add(
-        "Refresh User", make_email(), SecurityService.hash_password("pw")
+        "Refresh User", make_email(), await SecurityService.hash_password("pw")
     )
     await repo.update(user.id, is_verified=True)
 

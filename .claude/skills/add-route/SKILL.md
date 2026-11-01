@@ -15,28 +15,36 @@ description: Add a new FastAPI route to an existing fasti-kit domain, following 
 Each domain has a `dependencies.py` with factory functions (`get_user_repository`, `get_user_service`, `get_current_user` in `user/dependencies.py`). Add new endpoints as parameters using these, following:
 
 ```python
-@user_router.get("/get", response_model=UserResponse)
+@user_router.get("/me", response_model=UserResponse)
 async def get_user(user: User = Depends(get_current_user)) -> User:
     return user
 ```
+
+Paths are resource-style: a plural noun for the collection, `/{id}` for one item, `/me` for the caller's own record, and the HTTP method for the action (`POST /users`, `PATCH /users/me`, `GET /products/{id}`). No verbs in paths (`/create`, `/get`, `/update`, `/delete`, `/list`). A sub-resource nests under its parent (`/users/{id}/orders`). Actions that aren't CRUD, like `/auth/login`, are the exception.
 
 If the endpoint needs a new repository/service method, add it to `<domain>/repositories/*.py` / `<domain>/services/*.py` first — routes call services, services call repositories, never skip a layer (`import-linter`'s `"DDD layers one-way"` contract enforces this at `uv run lint-imports` time).
 
 ## 3. Auth and scopes
 
-- Full auth requirement: `payload: TokenPayload = Depends(auth.token_required(type="access", locations=["headers"]))`, then `UUID(payload.sub)` for the user id — see `/update`, `/delete`, `/list` in `user_router.py`.
-- Need the full user entity, not just the token payload: use `Depends(get_current_user)` instead (does the DB lookup + `is_active` check for you) — see `/get`.
-- Scope-gated (admin-only, etc.): `Depends(require_scopes("scope:name"))` from `auth/dependencies.py` — see `/protected` in `auth_router.py`.
+- Full auth requirement: `payload: TokenPayload = Depends(auth.token_required(type="access", locations=["headers"]))`, then `UUID(payload.sub)` for the user id — see `PATCH /users/me`, `DELETE /users/me`, `GET /users` in `user_router.py`.
+- Need the full user entity, not just the token payload: use `Depends(get_current_user)` instead (does the DB lookup + `is_active` check for you) — see `GET /users/me`.
+- Scope-gated (admin-only, etc.): `Depends(require_scopes("scope:name"))` from `auth/dependencies.py` — see the `admin:read` guard on `dlq_router` in `core/dead_letter/router.py`.
 - Refresh-token-only endpoints (e.g. `/refresh`): `locations=["cookies"]`, `type="refresh"`.
 
 ## 4. Error handling
 
-Two valid patterns exist in this codebase — pick based on what's already nearby, don't mix silently within one router:
+Errors are raised as `DomainException` subclasses, never `HTTPException`:
 
-- **`HTTPException(status, detail=...)`** — what every current route actually uses (`auth_router.py`, `user_router.py`). Gets auto-formatted into RFC 7807 `ProblemDetails` by `core/problem.py`'s `http_exception_handler`. Default choice for new endpoints unless you have a reason to reach for the below.
-- **`DomainException` subclasses** (`core/exception.py`: `EntityNotFoundError`, `UnauthorizedActionError`, `ConflictError`, or a new subclass) — defined and handler-installed (`install_problem_handlers` in `main.py`) but **not yet used by any route or service**. These carry a `type_str`/`title` for a more specific RFC 7807 `type` URI. Prefer these if you're writing service/repository-layer code that shouldn't need to know an HTTP status code, or if the existing generic `about:blank` type isn't descriptive enough for a client to branch on.
+- `core/exception.py`: `EntityNotFoundError` (404), `UnauthorizedActionError` (403), `ConflictError` (409), `BadRequestError` (400).
+- `auth/exceptions.py`: `InvalidCredentialsError` (401), `InvalidTokenError` (400).
+- Need another case? Add a subclass with its own `status_code`, `type_str` (e.g. `errors/rate-plan-exceeded`) and `title`, next to the domain that owns it.
 
-Either way, never construct a raw JSON error body by hand — always go through one of these two so `X-Request-ID`/correlation id and `application/problem+json` formatting stay consistent.
+Where they're raised:
+- **Services and repositories** raise them for business rules and data errors (missing record, duplicate, bad token). Repositories turn `IntegrityError` into `ConflictError`.
+- **Dependencies** raise them too: `get_current_user` (`EntityNotFoundError` / `UnauthorizedActionError`), `require_scopes` (`UnauthorizedActionError`).
+- **Routes** don't raise or catch errors. They call one service method and let the exception propagate.
+
+`install_problem_handlers` (`core/problem.py`) turns every one into an RFC 7807 `application/problem+json` response, with `type` from `type_str` and the correlation id attached. Never build an error body by hand. Clients branch on `type`, so reuse an existing subclass when the meaning matches.
 
 For OpenAPI docs, declare non-2xx responses explicitly with `core/openapi.py`'s `problem_responses(*status_codes)`:
 ```python
@@ -47,15 +55,15 @@ For OpenAPI docs, declare non-2xx responses explicitly with `core/openapi.py`'s 
 
 Sensitive/abuse-prone endpoints (login, registration, password reset, verification) use:
 ```python
-@user_router.post("/create", response_model=UserResponse)
+@user_router.post("", response_model=UserResponse)
 @limiter.limit("5/minute")
 async def create_user(request: Request, ...):
 ```
-`request: Request` must be a parameter for `slowapi` to key on it. Only add this where abuse is a real concern — not every endpoint needs it (`/get`, `/list` don't have it).
+`request: Request` must be a parameter for `slowapi` to key on it. Only add this where abuse is a real concern — not every endpoint needs it (`GET /users/me`, `GET /users` don't have it).
 
 ## 6. Read-after-write consistency
 
-If the endpoint reads data it (or a token) depends on being immediately fresh right before a write happens — e.g. checking a user row before issuing a token — call `force_primary_var.set(True)` (from `core/database.py`) at the top of the handler, before the read. See `/login`, `/refresh`, `/verify-email` in `auth_router.py`. Skip this for plain reads (`/get`, `/list`) — they're fine going to the replica.
+Routes never touch `force_primary_var`, and can't: import-linter forbids routes and services from importing `core.database`. If a read must see the latest write (e.g. checking a user row before issuing a token), the repository method takes `consistent=True` and pins the read to primary itself. See `UserRepository.get` / `get_by_email`, as called by `AuthService.refresh` and `SecurityService.authenticate`. Plain reads (`GET /users/me`, `GET /users`) are fine going to the replica.
 
 ## 7. Verify
 

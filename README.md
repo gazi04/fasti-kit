@@ -252,6 +252,36 @@ docker compose up -d pgadmin prometheus grafana dozzle caddy
 | Prometheus | http://localhost:9090 |
 | Dozzle (log viewer) | http://localhost:8008 |
 
+### Running the API in Docker (optional)
+
+The default workflow above (`uv run main.py`, bare-metal) is still the intended way to develop.
+A production-shaped Docker image is also available, but it's opt-in via a Compose profile —
+plain `docker compose up` never starts it:
+
+```bash
+docker-compose --profile app up -d --build   # or: just docker-app
+```
+
+This builds and runs the app plus the SAQ worker as containers (`fasti-app`, `fasti-worker`),
+pointed at the same `postgres-primary`/`postgres-replica`/`redis`/`mailpit` services over the
+Compose network, and runs `alembic upgrade head` on boot. To have the `caddy` gateway route
+`api.fasti.localhost` to the dockerized app instead of the host process, set
+`API_UPSTREAM=app:8000` in `.env` and restart `caddy`.
+
+### Dev container (optional)
+
+`.devcontainer/` sets up the whole toolchain for VS Code, Codespaces or any Dev Containers
+client: Python 3.13, `uv`, and the compose infra (`postgres-primary`, `postgres-replica`,
+`redis`, `mailpit`) on the same network, so the app reaches them by service name rather than
+`localhost`. On first create it installs dependencies, fills in `JWT_SECRET_KEY` in `.env` if
+it is empty, creates the `fasti_kit_test` database, runs migrations and installs the pre-commit
+hooks. Then `uv run main.py` and `uv run pytest` work as usual.
+
+Copying `.env.example` to `.env` runs on the host, so use Linux, macOS or WSL. The compose
+services still publish their usual host ports (5433, 5434, 6379, 1025, 8025), so stop any
+infra you already have running before opening the container. The container has no Docker
+CLI, so `just dev` and `just docker` aren't available inside it.
+
 ## Scaffolding a new domain
 
 ```bash
@@ -267,9 +297,11 @@ model, repository, schema, service and route, adds the `Depends()` factories to
 `core/api_versions.py`, and runs ruff over everything it touched. Run either command
 again and it changes nothing. Leave out a flag and the command asks for it.
 
-Generated routes follow the `user` domain's shape: `/create`, `/get/{id}`, `/update/{id}`,
-`/delete/{id}` and a cursor-paginated `/list`. Create, update and delete require an
-access token.
+Generated routes are resource-style, named after the plural entity (the same name as
+its table): `POST /products`, `GET /products/{id}`, `PATCH /products/{id}`,
+`DELETE /products/{id}` and a cursor-paginated `GET /products`. The HTTP method carries
+the action, so paths never contain verbs. Create, update and delete require an access
+token.
 
 Each layer also has its own command, for adding one piece to an existing domain:
 `create-entity`, `create-model`, `create-repository`, `create-schema`, `create-service`,
@@ -309,12 +341,11 @@ All domain routes are mounted under `/api/v1`.
 | POST | `/api/v1/auth/resend-verification` | Resend verification email (enumeration-safe) |
 | POST | `/api/v1/auth/forgot-password` | Start password reset (enumeration-safe) |
 | POST | `/api/v1/auth/reset-password` | Consume password reset token |
-| GET | `/api/v1/auth/protected` | Reference route for `require_scopes(...)` |
-| POST | `/api/v1/user/create` | Create a user |
-| GET | `/api/v1/user/get` | Fetch a user |
-| PATCH | `/api/v1/user/update` | Update a user |
-| DELETE | `/api/v1/user/delete` | Delete a user |
-| GET | `/api/v1/user/list` | Cursor-paginated user list |
+| POST | `/api/v1/users` | Register a user |
+| GET | `/api/v1/users/me` | Fetch the current user |
+| PATCH | `/api/v1/users/me` | Update the current user |
+| DELETE | `/api/v1/users/me` | Close the current user's account |
+| GET | `/api/v1/users` | Cursor-paginated user list (`admin:read` scope) |
 | GET | `/api/admin/tasks/dlq` | List dead-letter jobs (`admin:read` scope) |
 | POST | `/api/admin/tasks/dlq/{id}/retry` | Retry a dead-lettered job |
 
@@ -326,7 +357,7 @@ the app is running.
 ```bash
 uv run pytest                                        # full suite
 uv run pytest tests/test_user_domain.py::test_name   # single test
-uv run pytest --cov                                   # coverage, fails under 70%
+uv run pytest --cov                                   # coverage, fails under 85%
 ```
 
 Tests run against a real Postgres database: the one in `DATABASE_URL` with `_test` added to

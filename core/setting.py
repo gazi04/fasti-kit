@@ -1,3 +1,4 @@
+import ipaddress
 from functools import lru_cache
 from typing import Literal
 
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
     allowed_origins: list[str]
 
     backend_url: str = "http://localhost:8000"
+
+    forwarded_allow_ips: str = "127.0.0.1,::1"
 
     jwt_secret_key: str
     jwt_cookie_secure: bool = False
@@ -81,6 +84,24 @@ class Settings(BaseSettings):
     def _ensure_scheme(cls, value: str) -> str:
         if "://" not in value:
             return f"http://{value}"
+        return value
+
+    @field_validator("forwarded_allow_ips")
+    @classmethod
+    def _validate_forwarded_allow_ips(cls, value: str) -> str:
+        for entry in (item.strip() for item in value.split(",")):
+            if entry == "*":
+                continue
+            try:
+                if "/" in entry:
+                    ipaddress.ip_network(entry)
+                else:
+                    ipaddress.ip_address(entry)
+            except ValueError as exc:
+                raise ValueError(
+                    f"FORWARDED_ALLOW_IPS entry {entry!r} is not an IP address, "
+                    "a CIDR network or '*'"
+                ) from exc
         return value
 
 

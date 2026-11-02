@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 import core.models
 from alembic import context
 from core.database import Base
+from core.migration_lock import migration_lock
 from core.setting import get_settings
 
 settings = get_settings()
@@ -57,10 +59,11 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    with migration_lock(connection, logging.getLogger("alembic.env")):
+        context.configure(connection=connection, target_metadata=target_metadata)
 
-    with context.begin_transaction():
-        context.run_migrations()
+        with context.begin_transaction():
+            context.run_migrations()
 
 
 async def run_migrations_online() -> None:

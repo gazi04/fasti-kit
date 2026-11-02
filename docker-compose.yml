@@ -1,5 +1,12 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres-primary:
+    logging: *default-logging
     image: bitnami/postgresql:latest
     container_name: fasti-postgres-primary
     environment:
@@ -20,6 +27,7 @@ services:
       retries: 5
 
   postgres-replica:
+    logging: *default-logging
     image: bitnami/postgresql:latest
     container_name: fasti-postgres-replica
     environment:
@@ -42,6 +50,7 @@ services:
       retries: 5
 
   pgadmin:
+    logging: *default-logging
     image: dpage/pgadmin4:8
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
@@ -62,6 +71,7 @@ services:
       retries: 5
 
   redis:
+    logging: *default-logging
     image: redis:7-alpine
     container_name: fasti-redis
     ports:
@@ -75,6 +85,7 @@ services:
       retries: 5
 
   mailpit:
+    logging: *default-logging
     image: axllent/mailpit
     container_name: mailpit
     restart: unless-stopped
@@ -90,6 +101,7 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
   dozzle:
+    logging: *default-logging
     image: amir20/dozzle:latest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -98,6 +110,7 @@ services:
     restart: unless-stopped
 
   prometheus:
+    logging: *default-logging
     image: prom/prometheus:latest
     container_name: fasti-prometheus
     ports:
@@ -112,6 +125,7 @@ services:
     restart: unless-stopped
 
   grafana:
+    logging: *default-logging
     image: grafana/grafana:latest
     container_name: fasti-grafana
     ports:
@@ -123,6 +137,7 @@ services:
     restart: unless-stopped
 
   caddy:
+    logging: *default-logging
     image: caddy:2-alpine
     container_name: fasti_gateway
     environment:
@@ -143,6 +158,7 @@ services:
   # Default `docker-compose up` never starts these; the bare-metal `uv run main.py`
   # workflow stays the default. See README's "Running the API in Docker" section.
   app:
+    logging: *default-logging
     build:
       context: .
       dockerfile: Dockerfile
@@ -168,6 +184,7 @@ services:
     restart: unless-stopped
 
   worker:
+    logging: *default-logging
     build:
       context: .
       dockerfile: Dockerfile

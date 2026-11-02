@@ -1,11 +1,12 @@
 import asyncio
-import logging
 from contextlib import suppress
 
 from saq import CronJob
 
 from core.database import dispose_engines
 from core.dead_letter.hook import record_dead_letter
+from core.logging.setup import setup_logging
+from core.middlewares.correlation import request_id_context
 from core.outbox.relay import relay_loop
 from core.queue import task_queue
 from core.redis import close_redis
@@ -18,11 +19,11 @@ from .tasks import (
     send_email_task,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | WORKER | %(levelname)s | %(message)s",
-    force=True,
-)
+setup_logging()
+
+
+async def _bind_job_correlation_id(ctx) -> None:
+    request_id_context.set(ctx["job"].key)
 
 
 async def _start_relay(ctx) -> None:
@@ -51,5 +52,6 @@ settings = {
     "concurrency": 10,
     "startup": _start_relay,
     "shutdown": _release_pools,
+    "before_process": _bind_job_correlation_id,
     "after_process": record_dead_letter,
 }

@@ -4,11 +4,18 @@ from datetime import UTC, datetime, timedelta
 from saq import Worker
 from sqlalchemy import delete, select
 
+from auth.models.refresh_session_model import RefreshSessionModel
 from auth.models.revoked_token_model import RevokedTokenModel
 from core.database import AsyncSessionLocal
 from core.dead_letter.hook import record_dead_letter
+from core.factories.user_factory import make_email
 from core.worker.main import settings
-from core.worker.tasks import cleanup_outbox_task, cleanup_revoked_tokens_task
+from core.worker.tasks import (
+    cleanup_outbox_task,
+    cleanup_refresh_sessions_task,
+    cleanup_revoked_tokens_task,
+)
+from user.repositories.user_repository import UserRepository
 
 
 async def test_cleanup_revoked_tokens_task_deletes_only_expired_rows() -> None:
@@ -47,6 +54,25 @@ async def test_cleanup_revoked_tokens_task_deletes_only_expired_rows() -> None:
             await db.commit()
 
 
+async def test_cleanup_refresh_sessions_task_deletes_only_expired_rows(db) -> None:
+    user = await UserRepository(db).add("Sessions", make_email(), "pw")
+    expired = RefreshSessionModel(
+        user_id=user.id, expires_at=datetime.now(UTC) - timedelta(hours=1)
+    )
+    live = RefreshSessionModel(
+        user_id=user.id, expires_at=datetime.now(UTC) + timedelta(days=1)
+    )
+    db.add_all([expired, live])
+    await db.flush()
+
+    result = await cleanup_refresh_sessions_task(ctx={})
+
+    remaining = set((await db.scalars(select(RefreshSessionModel.id))).all())
+    assert result == {"status": "completed", "deleted": 1}
+    assert expired.id not in remaining
+    assert live.id in remaining
+
+
 async def test_worker_settings_register_all_task_functions() -> None:
     """Worker(**settings) builds a valid config: every task + cron function is registered
     and every cron expression is valid (Worker.__init__ raises on a bad cron string)."""
@@ -56,6 +82,7 @@ async def test_worker_settings_register_all_task_functions() -> None:
         "process_welcome_email",
         "send_email_task",
         "cleanup_revoked_tokens_task",
+        "cleanup_refresh_sessions_task",
         "cleanup_outbox_task",
         "cleanup_dead_letter_task",
     }

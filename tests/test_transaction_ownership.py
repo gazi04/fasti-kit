@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from auth.repositories.account_repository import AccountRepository
+from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.services.auth_service import AuthService
 from auth.services.email_verification_service import EmailVerificationService
@@ -116,7 +117,14 @@ async def test_service_flow_produces_exactly_the_repositorys_commit(db, counts) 
     user = await user_repo.add("Service", make_email(), "pw")
     token, jti = EmailVerificationService.create_verification_token(str(user.id))
     await user_repo.update(user.id, pending_verification_jti=jti)
-    service = AuthService(user_repo, AccountRepository(db), RevokedTokenRepository(db))
+    service = AuthService(
+        user_repo,
+        AccountRepository(db),
+        RevokedTokenRepository(db),
+        RefreshSessionRepository(db),
+        session_ttl=timedelta(days=1),
+        reuse_grace=timedelta(seconds=10),
+    )
     counts["commit"] = 0
 
     await service.verify_email(token)

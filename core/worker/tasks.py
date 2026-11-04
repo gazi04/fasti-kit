@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
+from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.database import AsyncSessionLocal
 from core.dead_letter.repository import DeadLetterJobRepository
@@ -36,6 +37,14 @@ async def cleanup_revoked_tokens_task(ctx):
         await RevokedTokenRepository(db).purge_expired()
     logger.info("Successfully cleaned up expired tokens")
     return {"status": "completed"}
+
+
+async def cleanup_refresh_sessions_task(ctx):
+    logger.info("Starting background cleanup of expired refresh sessions")
+    async with AsyncSessionLocal() as db:
+        deleted = await RefreshSessionRepository(db).purge_expired()
+    logger.info("Deleted %d expired refresh sessions", deleted)
+    return {"status": "completed", "deleted": deleted}
 
 
 async def cleanup_outbox_task(ctx):

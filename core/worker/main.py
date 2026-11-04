@@ -14,6 +14,7 @@ from core.redis import close_redis
 from .tasks import (
     cleanup_dead_letter_task,
     cleanup_outbox_task,
+    cleanup_refresh_sessions_task,
     cleanup_revoked_tokens_task,
     process_welcome_email,
     send_email_task,
@@ -46,6 +47,7 @@ settings = {
     "functions": [process_welcome_email, send_email_task],
     "cron_jobs": [
         CronJob(cleanup_revoked_tokens_task, cron="0 3 * * *"),
+        CronJob(cleanup_refresh_sessions_task, cron="15 3 * * *"),
         CronJob(cleanup_outbox_task, cron="30 3 * * *"),
         CronJob(cleanup_dead_letter_task, cron="0 4 * * *"),
     ],

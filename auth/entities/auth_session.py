@@ -13,3 +13,4 @@ class TokenRef:
 class AuthSession:
     user_id: uuid.UUID
     tokens: list[TokenRef] = field(default_factory=list)
+    refresh_session_id: uuid.UUID | None = None

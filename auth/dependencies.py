@@ -1,4 +1,5 @@
 import contextlib
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entities.auth_session import AuthSession, TokenRef
 from auth.repositories.account_repository import AccountRepository
+from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.services.auth_service import AuthService
 from core.database import AsyncSessionLocal, get_db
@@ -22,6 +24,7 @@ config = AuthXConfig(
     JWT_ALGORITHM=settings.jwt_algorithm,
     JWT_TOKEN_LOCATION=["headers", "cookies"],
     JWT_COOKIE_SECURE=settings.jwt_cookie_secure,
+    JWT_REFRESH_TOKEN_EXPIRES=timedelta(days=settings.jwt_refresh_token_ttl_days),
     JWT_COOKIE_HTTP_ONLY=True,  # Prevent JS access
     JWT_COOKIE_CSRF_PROTECT=True,  # CSRF protection for refresh
 )
@@ -51,8 +54,21 @@ def get_revoked_token_repository(
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(
-        UserRepository(db), AccountRepository(db), RevokedTokenRepository(db)
+        UserRepository(db),
+        AccountRepository(db),
+        RevokedTokenRepository(db),
+        RefreshSessionRepository(db),
+        session_ttl=timedelta(days=settings.jwt_refresh_token_ttl_days),
+        reuse_grace=timedelta(seconds=settings.refresh_reuse_grace_seconds),
     )
+
+
+def refresh_session_claims(payload: TokenPayload) -> tuple[UUID, int] | None:
+    claims = payload.model_extra or {}
+    try:
+        return UUID(claims["sid"]), int(claims["gen"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def get_auth_session(
@@ -62,6 +78,7 @@ def get_auth_session(
     ),
 ) -> AuthSession:
     tokens: list[TokenRef] = []
+    refresh_session_id: UUID | None = None
 
     if payload.jti is not None:
         tokens.append(TokenRef(payload.jti, payload.expiry_datetime))
@@ -79,8 +96,15 @@ def get_auth_session(
                 tokens.append(
                     TokenRef(refresh_payload.jti, refresh_payload.expiry_datetime)
                 )
+            claims = refresh_session_claims(refresh_payload)
+            if claims is not None:
+                refresh_session_id = claims[0]
 
-    return AuthSession(user_id=UUID(payload.sub), tokens=tokens)
+    return AuthSession(
+        user_id=UUID(payload.sub),
+        tokens=tokens,
+        refresh_session_id=refresh_session_id,
+    )
 
 
 def require_scopes(*required: str, all_required: bool = True):

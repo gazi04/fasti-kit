@@ -4,7 +4,7 @@ And can be used in the case where we want to import all the models but at the
 same time keep a clean code.
 """
 
-from auth.models import RevokedTokenModel  # noqa: F401
+from auth.models import RefreshSessionModel, RevokedTokenModel  # noqa: F401
 from core.database import Base  # noqa: F401
 from core.dead_letter.model import DeadLetterJobModel  # noqa: F401
 from core.outbox.model import OutboxEvent  # noqa: F401

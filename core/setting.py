@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_cookie_secure: bool = False
     jwt_algorithm: AlgorithmType = "HS256"
+    jwt_refresh_token_ttl_days: int = 20
+    refresh_reuse_grace_seconds: int = 10
 
     mail_username: str | None = None
     mail_password: str | None = None

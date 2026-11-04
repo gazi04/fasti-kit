@@ -19,3 +19,13 @@ class InvalidTokenError(DomainException):
             type_str="errors/invalid-token",
             title="Invalid Token",
         )
+
+
+class InvalidRefreshTokenError(DomainException):
+    def __init__(self) -> None:
+        super().__init__(
+            detail="Refresh token is no longer valid",
+            status_code=401,
+            type_str="errors/invalid-refresh-token",
+            title="Unauthorized",
+        )

@@ -11,12 +11,13 @@ from datetime import UTC, datetime, timedelta
 import jwt
 import pytest
 from authx import TokenPayload
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from auth.dependencies import auth
 from auth.exceptions import InvalidCredentialsError
-from auth.models import RevokedTokenModel
+from auth.models import RefreshSessionModel, RevokedTokenModel
 from auth.repositories.account_repository import AccountRepository
+from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.services.auth_service import AuthService
 from auth.services.email_verification_service import EmailVerificationService
@@ -39,9 +40,14 @@ def _disable_rate_limiting():
     limiter.enabled = True
 
 
-def _service(db) -> AuthService:
+def _service(db, reuse_grace: timedelta = timedelta(seconds=10)) -> AuthService:
     return AuthService(
-        UserRepository(db), AccountRepository(db), RevokedTokenRepository(db)
+        UserRepository(db),
+        AccountRepository(db),
+        RevokedTokenRepository(db),
+        RefreshSessionRepository(db),
+        session_ttl=timedelta(days=1),
+        reuse_grace=reuse_grace,
     )
 
 
@@ -249,20 +255,24 @@ async def test_service_refresh_requires_an_active_verified_user(db) -> None:
     repo = UserRepository(db)
     user = await repo.add("Refresh", make_email(), "pw")
     service = _service(db)
+    session = await RefreshSessionRepository(db).create(
+        user.id, datetime.now(UTC) + timedelta(days=1)
+    )
 
     with pytest.raises(InvalidCredentialsError):
-        await service.refresh(user.id)
+        await service.refresh(user.id, session.id, 0)
 
     await repo.update(user.id, is_verified=True)
-    refreshed = await service.refresh(user.id)
+    refreshed, rotated = await service.refresh(user.id, session.id, 0)
     assert refreshed.id == user.id
+    assert rotated.generation == 1
 
     await repo.delete(user.id)
     with pytest.raises(InvalidCredentialsError):
-        await service.refresh(user.id)
+        await service.refresh(user.id, session.id, 1)
 
     with pytest.raises(InvalidCredentialsError):
-        await service.refresh(uuid.uuid4())
+        await service.refresh(uuid.uuid4(), session.id, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -401,3 +411,143 @@ async def test_refresh_rejects_a_user_deactivated_after_login(client, db) -> Non
 
     assert response.status_code == 401, response.text
     assert response.json()["detail"] == "Invalid credentials"
+
+
+# ---------------------------------------------------------------------------
+# Refresh-token rotation: one session per login, a new cookie per refresh,
+# and a replayed old cookie revokes the session unless it is a tab race.
+# ---------------------------------------------------------------------------
+
+
+async def _refresh_with(client, response):
+    csrf = _keep_refresh_cookies(client, response)
+    return await client.post(REFRESH_URL, headers={CSRF_HEADER: csrf})
+
+
+def _refresh_payload(response) -> TokenPayload:
+    return _decode(response.cookies[REFRESH_COOKIE])
+
+
+def _session_claims(response) -> dict:
+    return _refresh_payload(response).model_extra or {}
+
+
+async def _age_last_rotation(db, session_id: str) -> None:
+    await db.execute(
+        update(RefreshSessionModel)
+        .where(RefreshSessionModel.id == uuid.UUID(session_id))
+        .values(rotated_at=datetime.now(UTC) - timedelta(minutes=5))
+    )
+
+
+async def test_refresh_rotates_the_cookie_without_extending_the_session(
+    client, db
+) -> None:
+    _, login = await _log_in(client, db)
+    first = _refresh_payload(login)
+
+    rotated = await _refresh_with(client, login)
+    assert rotated.status_code == 200, rotated.text
+    second = _refresh_payload(rotated)
+
+    assert _session_claims(rotated) == {"sid": _session_claims(login)["sid"], "gen": 1}
+    assert second.jti != first.jti
+    assert second.exp == first.exp
+
+    again = await _refresh_with(client, rotated)
+    assert again.status_code == 200, again.text
+    assert _session_claims(again)["gen"] == 2
+
+
+async def test_refresh_replay_within_grace_is_a_conflict_not_a_revoke(
+    client, db
+) -> None:
+    _, login = await _log_in(client, db)
+    rotated = await _refresh_with(client, login)
+    assert rotated.status_code == 200, rotated.text
+
+    replay = await _refresh_with(client, login)
+    assert replay.status_code == 409, replay.text
+    assert replay.json()["type"] == "errors/conflict"
+
+    latest = await _refresh_with(client, rotated)
+    assert latest.status_code == 200, latest.text
+
+
+async def test_refresh_replay_after_grace_revokes_the_whole_session(client, db) -> None:
+    _, login = await _log_in(client, db)
+    rotated = await _refresh_with(client, login)
+    assert rotated.status_code == 200, rotated.text
+    await _age_last_rotation(db, _session_claims(rotated)["sid"])
+
+    replay = await _refresh_with(client, login)
+    assert replay.status_code == 401, replay.text
+    assert replay.json()["type"] == "errors/invalid-refresh-token"
+
+    latest = await _refresh_with(client, rotated)
+    assert latest.status_code == 401, latest.text
+    assert latest.json()["detail"] == "Refresh token is no longer valid"
+
+
+async def test_refresh_rejects_a_token_issued_before_sessions(client, db) -> None:
+    user, _ = await _log_in(client, db)
+    legacy = auth.create_refresh_token(uid=str(user.id))
+    csrf = _decode(legacy).csrf
+    assert csrf is not None
+    client.cookies.clear()
+    client.cookies.set(REFRESH_COOKIE, legacy)
+    client.cookies.set(CSRF_COOKIE, csrf)
+
+    response = await client.post(REFRESH_URL, headers={CSRF_HEADER: csrf})
+
+    assert response.status_code == 401, response.text
+    assert response.json()["type"] == "errors/invalid-refresh-token"
+
+
+async def _session_of(db, response) -> RefreshSessionModel:
+    session_id = uuid.UUID(_session_claims(response)["sid"])
+    model = await db.get(RefreshSessionModel, session_id, populate_existing=True)
+    assert model is not None
+    return model
+
+
+async def test_logout_revokes_the_refresh_session(client, db) -> None:
+    _, login = await _log_in(client, db)
+    _keep_refresh_cookies(client, login)
+
+    logout = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+
+    assert logout.status_code == 200, logout.text
+    assert (await _session_of(db, login)).revoked_at is not None
+
+
+async def test_reset_password_revokes_every_refresh_session(client, db) -> None:
+    user, token, _ = await _user_awaiting_reset(db)
+    sessions = RefreshSessionRepository(db)
+    expiry = datetime.now(UTC) + timedelta(days=1)
+    first = await sessions.create(user.id, expiry)
+    second = await sessions.create(user.id, expiry)
+
+    response = await client.post(
+        RESET_URL, json={"token": token, "new_password": "brand-new-pw"}
+    )
+
+    assert response.status_code == 200, response.text
+    for session in (first, second):
+        stored = await sessions.get(session.id)
+        assert stored is not None and stored.revoked_at is not None
+
+
+async def test_delete_user_revokes_every_refresh_session(client, db) -> None:
+    _, login = await _log_in(client, db)
+
+    response = await client.delete(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert (await _session_of(db, login)).revoked_at is not None

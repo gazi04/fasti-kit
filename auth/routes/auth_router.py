@@ -12,8 +12,11 @@ from auth.dependencies import (
     auth,
     get_auth_service,
     get_auth_session,
+    refresh_session_claims,
 )
 from auth.entities.auth_session import AuthSession
+from auth.entities.refresh_session import RefreshSession
+from auth.exceptions import InvalidRefreshTokenError
 from auth.schemas.auth_schema import (
     ForgotPasswordRequest,
     LoginRequest,
@@ -28,6 +31,15 @@ from core.openapi import problem_responses
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+def _set_refresh_cookie(user_id: str, session: RefreshSession, response: Response):
+    refresh_token = auth.create_refresh_token(
+        uid=user_id,
+        expiry=session.expires_at,
+        data={"sid": str(session.id), "gen": session.generation},
+    )
+    auth.set_refresh_cookies(refresh_token, response)
+
+
 @auth_router.post("/login", responses=problem_responses(401, 422, 500))
 @limiter.limit("5/minute")
 async def login(
@@ -36,28 +48,32 @@ async def login(
     response: Response,
     service: AuthService = Depends(get_auth_service),
 ) -> LoginResponse:
-    user = await service.login(data.email, data.password)
+    user, session = await service.login(data.email, data.password)
 
     token = auth.create_access_token(uid=str(user.id), scopes=user.scope_list)
-    refresh_token = auth.create_refresh_token(uid=str(user.id))
-
-    auth.set_refresh_cookies(refresh_token, response)
+    _set_refresh_cookie(str(user.id), session, response)
 
     return LoginResponse(access_token=token)
 
 
-@auth_router.post("/refresh")
+@auth_router.post("/refresh", responses=problem_responses(401, 409, 500))
 @limiter.limit("5/minute")
 async def refresh(
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     payload: TokenPayload = Depends(
         auth.token_required(type="refresh", locations=["cookies"])
     ),
 ) -> LoginResponse:
-    user = await service.refresh(UUID(payload.sub))
+    claims = refresh_session_claims(payload)
+    if claims is None:
+        raise InvalidRefreshTokenError
+
+    user, session = await service.refresh(UUID(payload.sub), *claims)
 
     new_access_token = auth.create_access_token(uid=payload.sub, scopes=user.scope_list)
+    _set_refresh_cookie(payload.sub, session, response)
     return LoginResponse(access_token=new_access_token)
 
 
@@ -67,7 +83,7 @@ async def logout(
     service: AuthService = Depends(get_auth_service),
     session: AuthSession = Depends(get_auth_session),
 ) -> dict:
-    await service.logout(session.tokens)
+    await service.logout(session)
     auth.unset_refresh_cookies(response)
     return {"message": "Logged out"}
 

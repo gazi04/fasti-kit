@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from auth.entities.auth_session import TokenRef
+from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.database import transaction
 from core.exception import EntityNotFoundError
@@ -17,6 +18,7 @@ class AccountRepository:
         self.db = db
         self._users = UserRepository(db)
         self._tokens = RevokedTokenRepository(db)
+        self._sessions = RefreshSessionRepository(db)
         self._outbox = OutboxRepository(db)
 
     async def verify_email(self, user_id: UUID, jti: str, expires_at: datetime) -> User:
@@ -35,6 +37,7 @@ class AccountRepository:
             if user is None:
                 raise EntityNotFoundError("User", str(user_id))
             await self._tokens.stage_add(jti, expires_at)
+            await self._sessions.stage_revoke_all_for_user(user_id)
             return user
 
     async def start_email_verification(
@@ -57,10 +60,17 @@ class AccountRepository:
                 raise EntityNotFoundError("User", str(user_id))
             await self._outbox.stage_add("send_email_task", email_payload)
 
-    async def revoke_tokens(self, tokens: Sequence[TokenRef]) -> None:
+    async def logout(
+        self,
+        user_id: UUID,
+        tokens: Sequence[TokenRef],
+        refresh_session_id: UUID | None,
+    ) -> None:
         async with transaction(self.db):
             for token in tokens:
                 await self._tokens.stage_add_if_absent(token.jti, token.expires_at)
+            if refresh_session_id is not None:
+                await self._sessions.stage_revoke(refresh_session_id, user_id)
 
     async def close_account(
         self, user_id: UUID, tokens: Sequence[TokenRef]
@@ -71,4 +81,5 @@ class AccountRepository:
                 return None
             for token in tokens:
                 await self._tokens.stage_add_if_absent(token.jti, token.expires_at)
+            await self._sessions.stage_revoke_all_for_user(user_id)
             return user

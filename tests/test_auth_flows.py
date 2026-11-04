@@ -342,15 +342,12 @@ async def test_refresh_issues_a_working_access_token(client, db) -> None:
 async def test_refresh_picks_up_scopes_granted_after_login(client, db) -> None:
     user, login = await _log_in(client, db)
     csrf = _keep_refresh_cookies(client, login)
-    await UserRepository(db).update(user.id, scopes="users:read admin:read")
+    await UserRepository(db).update(user.id, scopes="admin:read")
 
     response = await client.post(REFRESH_URL, headers={CSRF_HEADER: csrf})
 
     assert response.status_code == 200, response.text
-    assert _decode(response.json()["access_token"]).scopes == [
-        "users:read",
-        "admin:read",
-    ]
+    assert _decode(response.json()["access_token"]).scopes == ["admin:read"]
 
 
 async def test_refresh_requires_the_csrf_header(client, db) -> None:

@@ -16,7 +16,7 @@ from user.schemas import CreateUserRequest
 
 app = typer.Typer()
 
-ADMIN_SCOPES = "users:read users:write admin:read"
+ADMIN_SCOPES = "admin:read admin:write"
 
 
 def _build_unique_user(used_emails: set[str]) -> CreateUserRequest:

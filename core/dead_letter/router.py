@@ -15,6 +15,8 @@ dlq_router = APIRouter(
     dependencies=[Depends(require_scopes("admin:read"))],
 )
 
+_require_write = Depends(require_scopes("admin:write"))
+
 
 @dlq_router.get("", response_model=CursorPage[DeadLetterJobResponse])
 async def list_dead_letter_jobs(
@@ -33,7 +35,7 @@ async def get_dead_letter_job(
     return await service.get_job(job_id)
 
 
-@dlq_router.post("/{job_id}/retry")
+@dlq_router.post("/{job_id}/retry", dependencies=[_require_write])
 async def retry_dead_letter_job(
     job_id: UUID,
     service: DeadLetterJobService = Depends(get_dead_letter_service),
@@ -43,7 +45,11 @@ async def retry_dead_letter_job(
     return {"message": "queued for retry", "job_key": job.job_key}
 
 
-@dlq_router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+@dlq_router.delete(
+    "/{job_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[_require_write],
+)
 async def delete_dead_letter_job(
     job_id: UUID,
     service: DeadLetterJobService = Depends(get_dead_letter_service),
@@ -51,7 +57,7 @@ async def delete_dead_letter_job(
     await service.delete_job(job_id)
 
 
-@dlq_router.post("/purge")
+@dlq_router.post("/purge", dependencies=[_require_write])
 async def purge_dead_letter_jobs(
     data: PurgeRequest,
     service: DeadLetterJobService = Depends(get_dead_letter_service),

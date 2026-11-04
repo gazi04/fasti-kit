@@ -359,8 +359,28 @@ async def test_router_requires_admin_read_scope(client) -> None:
     assert scoped.status_code == 200
 
 
+async def test_router_writes_require_admin_write_scope(client, db) -> None:
+    read_only = _admin_headers(["admin:read"])
+    write_only = _admin_headers(["admin:write"])
+    row = await _record(DeadLetterJobRepository(db))
+
+    for headers in (read_only, write_only):
+        writes = [
+            await client.post(f"{DLQ_URL}/{row.id}/retry", headers=headers),
+            await client.delete(f"{DLQ_URL}/{row.id}", headers=headers),
+            await client.post(
+                f"{DLQ_URL}/purge", headers=headers, json={"only_retried": True}
+            ),
+        ]
+        assert [response.status_code for response in writes] == [403, 403, 403]
+
+    stored = await DeadLetterJobRepository(db).get(row.id)
+    assert stored is not None
+    assert stored.retried_at is None
+
+
 async def test_router_lists_and_retries_and_purges(client, db) -> None:
-    headers = _admin_headers(["admin:read"])
+    headers = _admin_headers(["admin:read", "admin:write"])
     row = await _record(DeadLetterJobRepository(db))
 
     listing = await client.get(DLQ_URL, headers=headers)
@@ -394,7 +414,7 @@ async def test_router_get_missing_returns_404(client) -> None:
 
 
 async def test_router_get_and_delete_single(client, db) -> None:
-    headers = _admin_headers(["admin:read"])
+    headers = _admin_headers(["admin:read", "admin:write"])
     row = await _record(DeadLetterJobRepository(db))
 
     fetched = await client.get(f"{DLQ_URL}/{row.id}", headers=headers)

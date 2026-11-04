@@ -15,7 +15,7 @@ class User:
     pending_password_reset_jti: str | None
     created_at: datetime
     updated_at: datetime
-    scopes: str = "users:read users:write"
+    scopes: str = ""
 
     @property
     def scope_list(self) -> list[str]:

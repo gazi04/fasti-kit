@@ -42,7 +42,7 @@ class UserModelFactory(BaseSQLAlchemyFactory[UserModel]):
     updated_at = Ignore()
     is_active = True
     is_verified = False
-    scopes = "users:read users:write"
+    scopes = ""
     pending_verification_jti = None
     pending_password_reset_jti = None
 

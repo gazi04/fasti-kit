@@ -6,6 +6,12 @@ from authx.types import AlgorithmType
 from pydantic import EmailStr, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DOCKER_BRIDGE_HOST_IP = "172.17.0.1"
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",")]
+
 
 class Settings(BaseSettings):
     environment: Literal["local", "production"] = "local"
@@ -23,6 +29,7 @@ class Settings(BaseSettings):
     allowed_origins: list[str]
 
     backend_url: str = "http://localhost:8000"
+    server_hosts: str = f"127.0.0.1,{DOCKER_BRIDGE_HOST_IP}"
 
     forwarded_allow_ips: str = "127.0.0.1,::1"
 
@@ -88,10 +95,27 @@ class Settings(BaseSettings):
             return f"http://{value}"
         return value
 
+    @computed_field
+    @property
+    def server_host_list(self) -> list[str]:
+        return _split_csv(self.server_hosts)
+
+    @field_validator("server_hosts")
+    @classmethod
+    def _validate_server_hosts(cls, value: str) -> str:
+        for entry in _split_csv(value):
+            try:
+                ipaddress.ip_address(entry)
+            except ValueError as exc:
+                raise ValueError(
+                    f"SERVER_HOSTS entry {entry!r} is not an IP address"
+                ) from exc
+        return value
+
     @field_validator("forwarded_allow_ips")
     @classmethod
     def _validate_forwarded_allow_ips(cls, value: str) -> str:
-        for entry in (item.strip() for item in value.split(",")):
+        for entry in _split_csv(value):
             if entry == "*":
                 continue
             try:

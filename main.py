@@ -108,12 +108,16 @@ Instrumentator().instrument(app).expose(app)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(
+    from core.dev_server import bind_sockets
+
+    config = uvicorn.Config(
         app,
         loop="uvloop",
-        host="127.0.0.1",
         port=8000,
         proxy_headers=False,
         log_config=None,
         timeout_graceful_shutdown=settings.shutdown_timeout,
+    )
+    uvicorn.Server(config).run(
+        sockets=bind_sockets(settings.server_host_list, config.port)
     )

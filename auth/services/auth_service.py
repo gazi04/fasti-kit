@@ -6,6 +6,7 @@ from uuid import UUID
 
 import jwt
 
+from auth.blocklist import TokenBlocklist
 from auth.entities.auth_session import AuthSession, TokenRef
 from auth.entities.refresh_session import RefreshSession
 from auth.exceptions import (
@@ -36,6 +37,7 @@ class AuthService:
         account_repo: AccountRepository,
         token_repo: RevokedTokenRepository,
         session_repo: RefreshSessionRepository,
+        blocklist: TokenBlocklist,
         *,
         session_ttl: timedelta,
         reuse_grace: timedelta,
@@ -44,6 +46,7 @@ class AuthService:
         self.account_repo = account_repo
         self.token_repo = token_repo
         self.session_repo = session_repo
+        self.blocklist = blocklist
         self.session_ttl = session_ttl
         self.reuse_grace = reuse_grace
 
@@ -87,11 +90,13 @@ class AuthService:
         raise InvalidRefreshTokenError
 
     async def logout(self, session: AuthSession) -> None:
+        await self.blocklist.revoke(session.tokens)
         await self.account_repo.logout(
             session.user_id, session.tokens, session.refresh_session_id
         )
 
     async def close_account(self, user_id: UUID, tokens: Sequence[TokenRef]) -> None:
+        await self.blocklist.revoke(tokens)
         user = await self.account_repo.close_account(user_id, tokens)
 
         if user is None:

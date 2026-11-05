@@ -5,6 +5,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import auth.dependencies as auth_dependencies
+from auth.blocklist import READY_KEY
 from core.database import (
     AsyncResilientRoutingSession,
     Base,
@@ -41,6 +42,15 @@ async def _reset_redis_pool():
     """
     yield
     await redis.aclose()
+
+
+@pytest.fixture(autouse=True)
+async def _reset_token_blocklist():
+    keys = [key async for key in redis.scan_iter(match="auth:blocklist:*")]
+    if keys:
+        await redis.delete(*keys)
+    await redis.set(READY_KEY, 1)
+    yield
 
 
 @pytest.fixture(autouse=True)

@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+import auth.dependencies as auth_dependencies
 from auth.repositories.account_repository import AccountRepository
 from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
@@ -122,6 +123,7 @@ async def test_service_flow_produces_exactly_the_repositorys_commit(db, counts) 
         AccountRepository(db),
         RevokedTokenRepository(db),
         RefreshSessionRepository(db),
+        auth_dependencies.blocklist,
         session_ttl=timedelta(days=1),
         reuse_grace=timedelta(seconds=10),
     )

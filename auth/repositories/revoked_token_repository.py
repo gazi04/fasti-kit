@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.entities.auth_session import TokenRef
 from auth.entities.revoked_token import RevokedToken
 from auth.models.revoked_token_model import RevokedTokenModel
 from core.database import force_primary_var, transaction
@@ -32,6 +33,19 @@ class RevokedTokenRepository:
             force_primary_var.reset(token)
 
         return result is not None
+
+    async def list_active(self) -> list[TokenRef]:
+        token = force_primary_var.set(True)
+        try:
+            rows = await self.db.execute(
+                select(RevokedTokenModel.jti, RevokedTokenModel.expires_at).where(
+                    RevokedTokenModel.expires_at > datetime.now(UTC)
+                )
+            )
+        finally:
+            force_primary_var.reset(token)
+
+        return [TokenRef(jti, expires_at) for jti, expires_at in rows.all()]
 
     async def purge_expired(self) -> int:
         force_primary_var.set(True)

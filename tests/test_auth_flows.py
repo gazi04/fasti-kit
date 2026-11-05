@@ -13,6 +13,7 @@ import pytest
 from authx import TokenPayload
 from sqlalchemy import select, update
 
+import auth.dependencies as auth_dependencies
 from auth.dependencies import auth
 from auth.exceptions import InvalidCredentialsError
 from auth.models import RefreshSessionModel, RevokedTokenModel
@@ -46,6 +47,7 @@ def _service(db, reuse_grace: timedelta = timedelta(seconds=10)) -> AuthService:
         AccountRepository(db),
         RevokedTokenRepository(db),
         RefreshSessionRepository(db),
+        auth_dependencies.blocklist,
         session_ttl=timedelta(days=1),
         reuse_grace=reuse_grace,
     )

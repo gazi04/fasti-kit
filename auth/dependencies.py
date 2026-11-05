@@ -7,6 +7,7 @@ from authx import AuthX, AuthXConfig, JWTDecodeError, TokenPayload
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.blocklist import TokenBlocklist
 from auth.entities.auth_session import AuthSession, TokenRef
 from auth.repositories.account_repository import AccountRepository
 from auth.repositories.refresh_session_repository import RefreshSessionRepository
@@ -14,6 +15,7 @@ from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.services.auth_service import AuthService
 from core.database import AsyncSessionLocal, get_db
 from core.exception import UnauthorizedActionError
+from core.redis import redis
 from core.setting import get_settings
 from user.repositories.user_repository import UserRepository
 
@@ -30,6 +32,7 @@ config = AuthXConfig(
 )
 
 auth = AuthX(config=config)
+blocklist = TokenBlocklist(redis)
 
 
 async def is_token_revoked(token: str, **kwargs: Any) -> bool:
@@ -42,8 +45,17 @@ async def is_token_revoked(token: str, **kwargs: Any) -> bool:
     if payload.jti is None:
         return True
 
+    cached = await blocklist.lookup(payload.jti)
+    if cached is not None:
+        return cached
+
     async with AsyncSessionLocal() as db:
-        return await RevokedTokenRepository(db).exists(payload.jti)
+        repo = RevokedTokenRepository(db)
+        revoked = await repo.exists(payload.jti)
+        if await blocklist.claim_seeding():
+            await blocklist.seed(await repo.list_active())
+
+    return revoked
 
 
 def get_revoked_token_repository(
@@ -58,6 +70,7 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
         AccountRepository(db),
         RevokedTokenRepository(db),
         RefreshSessionRepository(db),
+        blocklist,
         session_ttl=timedelta(days=settings.jwt_refresh_token_ttl_days),
         reuse_grace=timedelta(seconds=settings.refresh_reuse_grace_seconds),
     )

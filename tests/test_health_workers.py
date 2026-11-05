@@ -81,6 +81,49 @@ async def test_relay_loop_writes_heartbeat(db, monkeypatch, clean_heartbeat) -> 
     assert 0 < ttl <= 30
 
 
+async def test_relay_loop_logs_one_traceback_per_failure_streak(
+    monkeypatch, caplog, clean_heartbeat
+) -> None:
+    calls = 0
+    recovered_message = "Outbox relay recovered after 3 failed iterations"
+
+    async def flaky_dispatch(db, *, batch_size):
+        nonlocal calls
+        calls += 1
+        if calls <= 3:
+            raise RuntimeError(
+                'relation "outbox_events" does not exist\nSQL: SELECT ...'
+            )
+        return 0, 0
+
+    monkeypatch.setattr("core.outbox.relay.AsyncSessionLocal", lambda: _Ctx(None))
+    monkeypatch.setattr("core.outbox.relay.dispatch_pending", flaky_dispatch)
+    monkeypatch.setattr("core.outbox.relay.settings.outbox_poll_interval", 0.01)
+
+    with caplog.at_level("INFO", logger="core.outbox.relay"):
+        task = asyncio.create_task(relay_loop())
+        try:
+            for _ in range(200):
+                if recovered_message in caplog.messages:
+                    break
+                await asyncio.sleep(0.01)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    records = [r for r in caplog.records if r.name == "core.outbox.relay"]
+    with_traceback = [r for r in records if r.exc_info]
+    warnings = [r.getMessage() for r in records if r.levelname == "WARNING"]
+
+    assert len(with_traceback) == 1
+    assert warnings == [
+        'Outbox relay still failing (2 in a row): RuntimeError: relation "outbox_events" does not exist',
+        'Outbox relay still failing (3 in a row): RuntimeError: relation "outbox_events" does not exist',
+    ]
+    assert recovered_message in caplog.messages
+
+
 class _Ctx:
     def __init__(self, db) -> None:
         self.db = db

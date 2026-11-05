@@ -77,7 +77,23 @@ async def cleanup_dispatched(db: AsyncSession) -> int:
     return len(deleted.scalars().all())
 
 
+def _log_relay_failure(error: Exception, failures_in_a_row: int) -> None:
+    if failures_in_a_row == 1:
+        logger.exception("Outbox relay iteration failed; retrying")
+        return
+
+    first_line = next(iter(str(error).splitlines()), "")
+    logger.warning(
+        "Outbox relay still failing (%d in a row): %s: %s",
+        failures_in_a_row,
+        type(error).__name__,
+        first_line,
+    )
+
+
 async def relay_loop() -> None:
+    failures_in_a_row = 0
+
     while True:
         try:
             async with AsyncSessionLocal() as db:
@@ -85,9 +101,17 @@ async def relay_loop() -> None:
                     db, batch_size=settings.outbox_batch_size
                 )
             await redis.set(RELAY_HEARTBEAT_KEY, "1", ex=RELAY_HEARTBEAT_TTL)
+        except Exception as error:
+            failures_in_a_row += 1
+            _log_relay_failure(error, failures_in_a_row)
+        else:
+            if failures_in_a_row:
+                logger.info(
+                    "Outbox relay recovered after %d failed iterations",
+                    failures_in_a_row,
+                )
+                failures_in_a_row = 0
             if dispatched or failed:
                 logger.info("Outbox relay: dispatched=%d failed=%d", dispatched, failed)
-        except Exception:
-            logger.exception("Outbox relay iteration failed; retrying")
 
         await asyncio.sleep(settings.outbox_poll_interval)

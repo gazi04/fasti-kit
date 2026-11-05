@@ -19,10 +19,14 @@ from core.setting import get_settings
 from main import app
 
 settings = get_settings()
-_dev_url = make_url(settings.database_url)
-if not _dev_url.database:
-    raise RuntimeError("DATABASE_URL names no database to derive the test one from.")
-TEST_DATABASE_URL = _dev_url.set(database=f"{_dev_url.database}_test")
+TEST_DATABASE_URL = make_url(settings.database_url)
+
+for _engine in (primary_engine, replica_engine):
+    if not (_engine.url.database or "").endswith("_test"):
+        raise RuntimeError(
+            f"{_engine.url.database!r} is not a test database; "
+            "tests/isolation_plugin.py did not run."
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -136,9 +140,9 @@ async def client(db, monkeypatch):
 
     app.dependency_overrides[get_db] = _override_get_db
 
-    # is_token_revoked opens its own AsyncSessionLocal() against the *dev*
-    # database, outside the fixture's savepoint. Point it at the test session
-    # so authenticated routes can be exercised end to end.
+    # is_token_revoked opens its own AsyncSessionLocal(), outside the fixture's
+    # savepoint. Point it at the test session so authenticated routes can be
+    # exercised end to end.
     monkeypatch.setattr(
         auth_dependencies, "AsyncSessionLocal", lambda: _NullCloseSession(db)
     )

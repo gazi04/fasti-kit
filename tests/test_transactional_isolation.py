@@ -38,23 +38,15 @@ async def test_b_transactional_read_rollback(db):
 
 async def test_c_async_session_local_leakage(db):
     """
-    Test 3: Assert that direct usage of AsyncSessionLocal runs on
-    a different connection and doesn't see the uncommitted transaction
-    of the test, and doesn't get rolled back.
+    Test 3: Assert that direct usage of AsyncSessionLocal without the bind
+    override runs on its own pooled connection to the test database and
+    doesn't see the fixture's uncommitted row.
 
-    Unlike the rest of the suite, this deliberately uses the application's
-    real AsyncSessionLocal factory — and therefore reads the dev database
-    rather than fasti_kit_test. That separation is exactly the boundary
-    under test, so it must not be pointed at the test session.
-
-    The `db` fixture pins the routing session to the test connection via
-    bind_override_var so the real session class can be exercised against
-    fasti_kit_test. This test is the one place that must opt back out: with
-    the override active, AsyncSessionLocal() would resolve to the very same
+    The row is flushed while the override is still active, so it lands on the
+    fixture's connection. Only then is the override cleared for the second
+    session; with it active, AsyncSessionLocal() would resolve to that same
     connection and the separation under test would be invisible.
     """
-
-    override_token = bind_override_var.set(None)
 
     user = UserModel(
         email="test_leakage_check@example.com",
@@ -65,6 +57,7 @@ async def test_c_async_session_local_leakage(db):
     db.add(user)
     await db.flush()
 
+    override_token = bind_override_var.set(None)
     try:
         async with AsyncSessionLocal() as session2:
             result = await session2.execute(

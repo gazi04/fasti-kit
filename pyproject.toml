@@ -106,7 +106,7 @@ testpaths = ["tests"]
 pythonpath = ["."]                        # lets bare `uv run pytest` import main.py
 asyncio_mode = "auto"                    # no @pytest.mark.asyncio on every test
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -p tests.isolation_plugin"
 
 [tool.coverage.run]
 source = ["auth", "user", "core"]

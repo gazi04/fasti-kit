@@ -82,12 +82,9 @@ jobs:
 
       - name: Prepare test databases
         if: ${{ !cancelled() }}
-        # tests/conftest.py's fixtures create their own schema in `fasti_kit_test`
-        # (fine, no migration needed there) but a handful of tests
-        # (test_worker_tasks.py, test_dead_letter.py, test_lifespan.py) go through
-        # AsyncSessionLocal() directly, hitting the plain `fasti_kit` DATABASE_URL
-        # for real — that database needs actual migrations applied, same as any
-        # dev environment gets from the README's `uv run alembic upgrade head`.
+        # tests/isolation_plugin.py points the whole test run at `fasti_kit_test`,
+        # whose schema the fixtures create. The migrations still run against
+        # `fasti_kit` to check that they apply cleanly from an empty database.
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE fasti_kit_test;"
           uv run alembic upgrade head

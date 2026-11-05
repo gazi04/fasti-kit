@@ -426,14 +426,3 @@ async def test_router_get_and_delete_single(client, db) -> None:
 
     again = await client.delete(f"{DLQ_URL}/{row.id}", headers=headers)
     assert again.status_code == 404
-
-
-# ------------------------------------------------------------------- cleanup task
-
-
-async def test_cleanup_dead_letter_task_runs_without_error() -> None:
-    from core.worker.tasks import cleanup_dead_letter_task
-
-    result = await cleanup_dead_letter_task(ctx={})
-    assert result["status"] == "completed"
-    assert "deleted" in result

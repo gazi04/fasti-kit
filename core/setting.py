@@ -3,10 +3,11 @@ from functools import lru_cache
 from typing import Literal
 
 from authx.types import AlgorithmType
-from pydantic import EmailStr, computed_field, field_validator
+from pydantic import EmailStr, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DOCKER_BRIDGE_HOST_IP = "172.17.0.1"
+COMPOSE_CADDY_IP = "172.28.0.10"
 
 
 def _split_csv(value: str) -> list[str]:
@@ -111,6 +112,13 @@ class Settings(BaseSettings):
                     f"SERVER_HOSTS entry {entry!r} is not an IP address"
                 ) from exc
         return value
+
+    @model_validator(mode="after")
+    def _trust_compose_caddy_locally(self) -> "Settings":
+        uses_default_trust = "forwarded_allow_ips" not in self.model_fields_set
+        if uses_default_trust and self.environment == "local":
+            self.forwarded_allow_ips = f"{self.forwarded_allow_ips},{COMPOSE_CADDY_IP}"
+        return self
 
     @field_validator("forwarded_allow_ips")
     @classmethod

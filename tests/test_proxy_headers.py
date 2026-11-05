@@ -71,3 +71,53 @@ def test_forwarded_allow_ips_accepts_addresses_networks_and_wildcard(
 def test_forwarded_allow_ips_rejects_malformed_entries(value: str) -> None:
     with pytest.raises(ValidationError, match="FORWARDED_ALLOW_IPS"):
         Settings(forwarded_allow_ips=value)  # pyright: ignore[reportCallIssue]
+
+
+def _settings_without_env(monkeypatch, **overrides) -> Settings:
+    monkeypatch.delenv("FORWARDED_ALLOW_IPS", raising=False)
+    monkeypatch.delenv("SERVER_HOSTS", raising=False)
+    required = {
+        "database_url": "postgresql+asyncpg://u:p@localhost:5433/db",
+        "allowed_origins": [],
+        "jwt_secret_key": "test-only",
+        "mail_from": "no-reply@example.com",
+        "mail_port": 1025,
+        "mail_server": "localhost",
+        "mail_starttls": False,
+        "mail_ssl_tls": False,
+    }
+    return Settings(_env_file=None, **(required | overrides))  # pyright: ignore[reportCallIssue]
+
+
+def test_local_default_trusts_the_compose_caddy(monkeypatch) -> None:
+    settings = _settings_without_env(monkeypatch, environment="local")
+
+    assert settings.forwarded_allow_ips == "127.0.0.1,::1,172.28.0.10"
+
+
+def test_production_default_trusts_only_loopback(monkeypatch) -> None:
+    settings = _settings_without_env(monkeypatch, environment="production")
+
+    assert settings.forwarded_allow_ips == "127.0.0.1,::1"
+
+
+def test_an_explicit_trust_list_is_kept_as_given(monkeypatch) -> None:
+    settings = _settings_without_env(
+        monkeypatch, environment="local", forwarded_allow_ips="10.0.0.1"
+    )
+
+    assert settings.forwarded_allow_ips == "10.0.0.1"
+
+
+def test_dev_server_listens_on_loopback_and_docker_bridge_by_default(
+    monkeypatch,
+) -> None:
+    settings = _settings_without_env(monkeypatch)
+
+    assert settings.server_host_list == ["127.0.0.1", "172.17.0.1"]
+
+
+@pytest.mark.parametrize("value", ["localhost", "0.0.0.0/0", "127.0.0.1,"])
+def test_server_hosts_rejects_non_addresses(monkeypatch, value: str) -> None:
+    with pytest.raises(ValidationError, match="SERVER_HOSTS"):
+        _settings_without_env(monkeypatch, server_hosts=value)

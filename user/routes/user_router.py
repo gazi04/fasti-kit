@@ -35,6 +35,7 @@ user_router = APIRouter(prefix="/users", tags=["User"])
 async def create_user(
     data: CreateUserRequest,
     request: Request,
+    response: Response,
     service: UserService = Depends(get_user_service),
 ) -> User:
     return await service.register(data)

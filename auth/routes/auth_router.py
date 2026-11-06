@@ -93,6 +93,7 @@ async def logout(
 async def verify_email(
     token: str,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
 ) -> dict:
     await service.verify_email(token)
@@ -104,6 +105,7 @@ async def verify_email(
 async def resend_verification(
     data: ResendVerificationRequest,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
 ) -> dict:
     await service.resend_verification(data.email)
@@ -120,6 +122,7 @@ async def resend_verification(
 async def forgot_password(
     data: ForgotPasswordRequest,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
 ) -> dict:
     await service.forgot_password(data.email)
@@ -135,6 +138,7 @@ async def forgot_password(
 async def reset_password(
     data: ResetPasswordRequest,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
 ) -> dict:
     await service.reset_password(data.token, data.new_password)

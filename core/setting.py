@@ -15,7 +15,7 @@ def _split_csv(value: str) -> list[str]:
 
 
 class Settings(BaseSettings):
-    environment: Literal["local", "production"] = "local"
+    environment: Literal["local", "staging", "production"] = "local"
 
     db_user: str | None = None
     db_password: str | None = None
@@ -75,10 +75,15 @@ class Settings(BaseSettings):
 
     @computed_field
     @property
+    def is_deployed(self) -> bool:
+        return self.environment != "local"
+
+    @computed_field
+    @property
     def get_replica_url(self) -> str:
         if self.database_replica_url:
             return self.database_replica_url
-        return self.database_url.replace("5433", "5434")
+        return self.database_url
 
     @computed_field
     @property

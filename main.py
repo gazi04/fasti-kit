@@ -76,7 +76,7 @@ install_auth_error_handlers(app)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     SecurityHeadersMiddleware,
-    include_hsts=settings.environment == "production",
+    include_hsts=settings.is_deployed,
 )
 app.add_middleware(CorrelationIdMiddleware)
 

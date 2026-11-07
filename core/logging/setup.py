@@ -80,7 +80,7 @@ def setup_logging() -> None:
     settings = get_settings()
     logging.config.dictConfig(
         build_logging_config(
-            json_logs=settings.environment == "production",
+            json_logs=settings.is_deployed,
             echo_sql=settings.db_echo,
         )
     )

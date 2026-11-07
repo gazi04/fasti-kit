@@ -58,7 +58,7 @@ def test_security_headers_present_on_error_response():
 
 
 def test_hsts_present_when_enabled():
-    """main.py enables this when ENVIRONMENT=production."""
+    """main.py enables this when ENVIRONMENT is staging or production."""
     client = TestClient(_make_app(include_hsts=True))
     hsts = client.get("/ok").headers["strict-transport-security"]
 

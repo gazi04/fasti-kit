@@ -268,6 +268,45 @@ Compose network, and runs `alembic upgrade head` on boot. To have the `caddy` ga
 `api.fasti.localhost` to the dockerized app instead of the host process, set
 `API_UPSTREAM=app:8000` in `.env` and restart `caddy`.
 
+### Migrations with several replicas
+
+`RUN_MIGRATIONS=true` is safe on more than one container. `alembic/env.py` takes a Postgres
+advisory lock before migrating, so one process runs the migrations and the others wait, log
+`Another process is running migrations, waiting for it to finish`, and then find nothing left
+to do. If a process dies mid-migration, Postgres drops the lock with its connection. The lock
+is a session lock, so point `DATABASE_URL` at Postgres directly when migrating, not at a
+PgBouncer in transaction mode.
+
+### Logs
+
+The app and the worker log to stdout only. Locally the format is readable; with
+`ENVIRONMENT=staging` or `production` each line is one JSON object with a `correlation_id` field (the
+request's `X-Request-ID`, or the job key in the worker). Rotation is left to the log driver:
+every Compose service caps its logs at 3 files of 10 MB. In production, configure the same on
+your container runtime. Kubernetes rotates container logs by default.
+
+### Running behind a proxy
+
+Rate limits key on the client IP. Behind a reverse proxy, every request comes from the proxy's
+IP, so the app takes the real client IP from `X-Forwarded-For`. It only does that for peers
+listed in `FORWARDED_ALLOW_IPS` (comma-separated IPs or CIDRs, default `127.0.0.1,::1`).
+Anyone else's `X-Forwarded-For` is ignored, so a client can't fake an IP to dodge a limit.
+
+Compose pins the default network to `172.28.0.0/16` and gives `caddy` the fixed IP
+`172.28.0.10`, which the `app` service trusts. If you created the network before this change,
+run `docker compose down` once so it is recreated with the new subnet.
+
+With the app on the host (`uv run main.py`), Caddy's requests come from `172.28.0.10` too.
+When `FORWARDED_ALLOW_IPS` is unset and `ENVIRONMENT=local`, the app trusts that address as
+well; without it every client would share Caddy's rate-limit bucket. `uv run main.py` listens
+on `127.0.0.1` and on the Docker bridge address `172.17.0.1` (`SERVER_HOSTS`), because on
+Linux containers reach the host through the bridge, not loopback. It skips an address the
+machine doesn't have, and it never listens on your network.
+
+In production, set
+`FORWARDED_ALLOW_IPS` to your load balancer's address range. Use `*` only if the app port is
+reachable through the proxy alone.
+
 ### Dev container (optional)
 
 `.devcontainer/` sets up the whole toolchain for VS Code, Codespaces or any Dev Containers
@@ -365,6 +404,12 @@ its name (`fasti_kit` -> `fasti_kit_test`), never the dev database itself. Creat
 before the first run. No mocking, no testcontainers. Each test runs inside an outer
 transaction plus a `SAVEPOINT` that's rolled back at teardown, so nothing persists
 between tests even if the code under test calls `commit()`.
+
+`tests/isolation_plugin.py` switches the whole run to the test database before any app
+module loads, so even code that opens its own session (worker tasks, the lifespan, health
+probes) cannot reach the dev data. It also moves Redis to DB 15 (`TEST_REDIS_DB` to change
+it), so tests don't touch the dev rate limits, cache, relay heartbeat or job queue. If the
+switch did not happen, `tests/conftest.py` refuses to run.
 
 ## Quality gates
 

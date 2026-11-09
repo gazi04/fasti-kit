@@ -113,7 +113,7 @@ async def test_account_operations_are_a_single_commit_each(db, counts) -> None:
     assert counts["commit"] == 4
 
 
-async def test_service_flow_produces_exactly_the_repositorys_commit(db, counts) -> None:
+async def test_service_flow_commits_only_through_repository_calls(db, counts) -> None:
     user_repo = UserRepository(db)
     user = await user_repo.add("Service", make_email(), "pw")
     token, jti = EmailVerificationService.create_verification_token(str(user.id))
@@ -131,4 +131,5 @@ async def test_service_flow_produces_exactly_the_repositorys_commit(db, counts) 
 
     await service.verify_email(token)
 
-    assert counts == {"commit": 1, "rollback": 0}
+    primary_read, write = 1, 1
+    assert counts == {"commit": primary_read + write, "rollback": 0}

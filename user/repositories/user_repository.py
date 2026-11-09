@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from fastapi_pagination.cursor import CursorPage, CursorParams
 from fastapi_pagination.ext.sqlalchemy import apaginate
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
@@ -45,28 +45,29 @@ class UserRepository:
             return user
 
     async def get(self, id: UUID, *, consistent: bool = False) -> User | None:
-        if consistent:
-            force_primary_var.set(True)
-
-        result = await self.db.scalar(select(UserModel).where(UserModel.id == id))
-
-        if result is None:
-            return
-
-        return self._to_entity(result)
+        return await self._find(UserModel.id == id, consistent=consistent)
 
     async def get_by_email(
         self, email: str, *, consistent: bool = False
     ) -> User | None:
+        return await self._find(UserModel.email == email, consistent=consistent)
+
+    async def _find(
+        self, condition: ColumnElement[bool], *, consistent: bool
+    ) -> User | None:
         if consistent:
-            force_primary_var.set(True)
+            return await self._find_on_primary_and_release(condition)
 
-        result = await self.db.scalar(select(UserModel).where(UserModel.email == email))
+        model = await self.db.scalar(select(UserModel).where(condition))
+        return None if model is None else self._to_entity(model)
 
-        if not result:
-            return
-
-        return self._to_entity(result)
+    async def _find_on_primary_and_release(
+        self, condition: ColumnElement[bool]
+    ) -> User | None:
+        force_primary_var.set(True)
+        async with transaction(self.db):
+            model = await self.db.scalar(select(UserModel).where(condition))
+            return None if model is None else self._to_entity(model)
 
     async def update(self, id: UUID, **fields) -> User | None:
         async with transaction(self.db):

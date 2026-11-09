@@ -29,6 +29,7 @@ dependencies = [
     "sqlakeyset>=2.0.1775222100",
     "rich>=15.0.0",
     "polyfactory>=3.3.0",
+    "prometheus-client>=0.26.0",
 ]
 
 [build-system]

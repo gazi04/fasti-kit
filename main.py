@@ -16,6 +16,7 @@ from core.dead_letter.router import dlq_router
 from core.health import health_router
 from core.limiter import limiter
 from core.logging.setup import setup_logging
+from core.metrics import install_pool_metrics
 from core.middlewares.correlation import CorrelationIdMiddleware
 from core.middlewares.n1_detector import N1DetectorMiddleware
 from core.middlewares.security_headers import SecurityHeadersMiddleware
@@ -104,6 +105,7 @@ app.include_router(dlq_router)
 app.include_router(v1_router)
 
 Instrumentator().instrument(app).expose(app)
+install_pool_metrics()
 
 if __name__ == "__main__":
     import uvicorn

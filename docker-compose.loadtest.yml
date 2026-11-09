@@ -1,0 +1,49 @@
+# Load-test overlay, used by `just loadtest`. Never needed for normal development.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml --profile app \
+#     up -d --build --scale app=3
+#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml run --rm k6
+#
+# See docs/load-testing.md.
+
+services:
+  app:
+    # Unpinned name and no host port, so `--scale app=N` can start N replicas.
+    # Caddy reaches them by DNS at load.fasti.localhost.
+    container_name: !reset null
+    ports: !reset []
+    environment:
+      # A deployed-like app: no N+1 detector, JSON logs.
+      ENVIRONMENT: staging
+      # Caddy, then k6. k6 sends a fake client IP per virtual user, so each one gets
+      # its own rate-limit bucket while the limiter stays on.
+      FORWARDED_ALLOW_IPS: 172.28.0.10,172.28.0.20
+
+  worker:
+    environment:
+      ENVIRONMENT: staging
+
+  redis:
+    # Containers reach Redis by name; publishing 6379 would clash with a host Redis.
+    ports: !reset []
+
+  k6:
+    image: grafana/k6:1.0.0
+    profiles: ["loadtest"]
+    networks:
+      default:
+        ipv4_address: 172.28.0.20
+    extra_hosts:
+      - "load.fasti.localhost:172.28.0.10"
+    volumes:
+      - ./loadtest:/scripts:ro
+      - ./loadtest/results:/results
+    environment:
+      BASE_URL: http://load.fasti.localhost
+      VUS: ${VUS:-50}
+      DURATION: ${DURATION:-3m}
+      USERS: ${USERS:-100}
+      LOGIN_RATE: ${LOGIN_RATE:-2}
+      SIGNUP_RATE: ${SIGNUP_RATE:-1}
+      LOAD_PASSWORD: ${LOAD_PASSWORD:-}
+    command: ["run", "--summary-export=/results/summary.json", "/scripts/api.js"]

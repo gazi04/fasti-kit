@@ -1,6 +1,22 @@
+{
+    servers {
+        # The k6 load generator (docker-compose.loadtest.yml). Its X-Forwarded-For is kept
+        # and its own IP appended; every other client's header is replaced.
+        trusted_proxies static 172.28.0.20
+    }
+}
+
 http://api.fasti.localhost {
     encode gzip
     reverse_proxy {$API_UPSTREAM:host.docker.internal:8000}
+}
+
+# Every `app` replica, found by DNS. Only used by the load test.
+http://load.fasti.localhost {
+    reverse_proxy {
+        dynamic a app 8000
+        lb_policy round_robin
+    }
 }
 
 http://mail.fasti.localhost {

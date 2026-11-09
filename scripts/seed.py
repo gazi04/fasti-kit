@@ -35,6 +35,8 @@ async def _seed(
     unverified_count: int,
     reset: bool,
     force: bool,
+    password: str | None,
+    email_prefix: str | None,
 ) -> None:
     if reset:
         await db.execute(delete(UserModel))
@@ -64,13 +66,22 @@ async def _seed(
     except ConflictError:
         typer.echo(f"Admin {admin_email!r} already exists — skipping.")
 
-    for _ in range(count):
+    shared_hash = await SecurityService.hash_password(password) if password else None
+    skipped = 0
+    for index in range(count):
         request = _build_unique_user(used_emails)
-        user = await repo.add(
-            full_name=request.name,
-            email=request.email,
-            password_hash=await SecurityService.hash_password(request.password),
-        )
+        try:
+            user = await repo.add(
+                full_name=request.name,
+                email=f"{email_prefix}-{index}@example.com"
+                if email_prefix
+                else request.email,
+                password_hash=shared_hash
+                or await SecurityService.hash_password(request.password),
+            )
+        except ConflictError:
+            skipped += 1
+            continue
         await repo.update(user.id, is_verified=True, is_active=True)
 
     for _ in range(unverified_count):
@@ -82,7 +93,8 @@ async def _seed(
         )
 
     typer.echo(
-        f"Seeded: {count} verified, {unverified_count} unverified, admin {admin_email}"
+        f"Seeded: {count - skipped} verified ({skipped} already existed), "
+        f"{unverified_count} unverified, admin {admin_email}"
     )
 
 
@@ -94,18 +106,17 @@ async def seed_database(
     reset: bool,
     force: bool,
     *,
+    password: str | None = None,
+    email_prefix: str | None = None,
     db: AsyncSession | None = None,
 ) -> None:
+    args = (count, admin_email, admin_password, unverified_count, reset, force)
     if db is not None:
-        await _seed(
-            db, count, admin_email, admin_password, unverified_count, reset, force
-        )
+        await _seed(db, *args, password, email_prefix)
         return
 
     async with AsyncSessionLocal() as owned:
-        await _seed(
-            owned, count, admin_email, admin_password, unverified_count, reset, force
-        )
+        await _seed(owned, *args, password, email_prefix)
 
 
 @app.command()
@@ -127,6 +138,16 @@ def seed(
         bool,
         typer.Option("--force", help="Seed even if the users table is non-empty"),
     ] = False,
+    password: Annotated[
+        str | None,
+        typer.Option(help="One password for every --count user (default: random each)"),
+    ] = None,
+    email_prefix: Annotated[
+        str | None,
+        typer.Option(
+            help="Name --count users <prefix>-<n>@example.com; existing ones are skipped"
+        ),
+    ] = None,
     allow_production: Annotated[
         bool,
         typer.Option(
@@ -142,7 +163,14 @@ def seed(
 
     asyncio.run(
         seed_database(
-            count, admin_email, admin_password, unverified_count, reset, force
+            count,
+            admin_email,
+            admin_password,
+            unverified_count,
+            reset,
+            force,
+            password=password,
+            email_prefix=email_prefix,
         )
     )
 

@@ -1,7 +1,10 @@
+import secrets
+
 import pytest
 import typer
 from sqlalchemy import func, select
 
+from auth.services.security_service import SecurityService
 from scripts.seed import seed_database
 from user.models.user_model import UserModel
 
@@ -83,3 +86,30 @@ async def test_seed_aborts_on_populated_table(db) -> None:
         )
 
     assert await _count(db) == before
+
+
+async def test_seed_named_users_share_a_password_and_rerun_skips_them(db) -> None:
+    password = secrets.token_hex(8)
+    for reset in (True, False):
+        await seed_database(
+            count=2,
+            admin_email=ADMIN_EMAIL,
+            admin_password=ADMIN_PASSWORD,
+            unverified_count=0,
+            reset=reset,
+            force=not reset,
+            password=password,
+            email_prefix="load",
+            db=db,
+        )
+
+    users = (
+        await db.scalars(select(UserModel).where(UserModel.email.like("load-%")))
+    ).all()
+    assert sorted(user.email for user in users) == [
+        "load-0@example.com",
+        "load-1@example.com",
+    ]
+    for user in users:
+        assert user.is_verified is True
+        assert await SecurityService.check_password(password, user.password_hash)

@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from fastapi_pagination.cursor import CursorPage, CursorParams
 from fastapi_pagination.ext.sqlalchemy import apaginate
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
@@ -90,6 +90,15 @@ class UserRepository:
             await self.db.flush()
 
         return result
+
+    async def count(self) -> int:
+        return await self.db.scalar(select(func.count()).select_from(UserModel)) or 0
+
+    async def purge_all(self) -> int:
+        force_primary_var.set(True)
+        async with transaction(self.db):
+            result = await self.db.execute(delete(UserModel).returning(UserModel.id))
+            return len(result.scalars().all())
 
     async def list(self, params: CursorParams | None = None) -> CursorPage[User]:
         return await apaginate(

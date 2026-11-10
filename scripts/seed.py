@@ -2,7 +2,6 @@ import asyncio
 from typing import Annotated
 
 import typer
-from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.services.security_service import SecurityService
@@ -10,7 +9,6 @@ from core.database import AsyncSessionLocal
 from core.exception import ConflictError
 from core.factories.user_factory import CreateUserRequestFactory
 from core.safety import SafetyError, ensure_safe_operation
-from user.models.user_model import UserModel
 from user.repositories.user_repository import UserRepository
 from user.schemas import CreateUserRequest
 
@@ -38,11 +36,11 @@ async def _seed(
     password: str | None,
     email_prefix: str | None,
 ) -> None:
+    repo = UserRepository(db)
     if reset:
-        await db.execute(delete(UserModel))
-        await db.commit()
+        await repo.purge_all()
 
-    user_count = await db.scalar(select(func.count()).select_from(UserModel)) or 0
+    user_count = await repo.count()
     if user_count and not reset and not force:
         typer.echo(
             f"ERROR: 'users' already has {user_count} row(s). "
@@ -51,7 +49,6 @@ async def _seed(
         )
         raise typer.Exit(1)
 
-    repo = UserRepository(db)
     used_emails: set[str] = {admin_email}
 
     try:

@@ -175,3 +175,15 @@ async def test_outbox_dispatch_rolls_back_when_the_batch_fails(
         await outbox.dispatch_pending(10, max_attempts=5, send=send)
 
     assert counts == {"commit": 0, "rollback": 1}
+
+
+async def test_outbox_purge_and_user_purge_are_one_commit_each(db, counts) -> None:
+    await UserRepository(db).add("Purge", make_email(), "pw")
+    counts["commit"] = 0
+
+    await OutboxRepository(db).purge_dispatched(datetime.now(UTC))
+    assert counts["commit"] == 1
+
+    assert await UserRepository(db).purge_all() >= 1
+    assert counts == {"commit": 2, "rollback": 0}
+    assert await UserRepository(db).count() == 0

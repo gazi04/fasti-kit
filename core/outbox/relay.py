@@ -1,12 +1,11 @@
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import AsyncSessionLocal, force_primary_var
-from core.outbox.model import OutboxEvent
+from core.database import AsyncSessionLocal
+from core.outbox.repository import OutboxRepository
 from core.queue import enqueue_task
 from core.redis import redis
 from core.setting import get_settings
@@ -18,63 +17,14 @@ RELAY_HEARTBEAT_KEY = "outbox:relay:heartbeat"
 RELAY_HEARTBEAT_TTL = max(30, int(6 * settings.outbox_poll_interval))
 
 
+async def _enqueue(task_name: str, key: str, payload: dict[str, Any]) -> None:
+    await enqueue_task(task_name, key=key, **payload)
+
+
 async def dispatch_pending(db: AsyncSession, *, batch_size: int) -> tuple[int, int]:
-    force_primary_var.set(True)
-
-    rows = (
-        (
-            await db.execute(
-                select(OutboxEvent)
-                .where(
-                    OutboxEvent.dispatched_at.is_(None),
-                    OutboxEvent.failed_at.is_(None),
-                )
-                .order_by(OutboxEvent.created_at)
-                .limit(batch_size)
-                .with_for_update(skip_locked=True)
-            )
-        )
-        .scalars()
-        .all()
+    return await OutboxRepository(db).dispatch_pending(
+        batch_size, max_attempts=settings.outbox_max_attempts, send=_enqueue
     )
-
-    dispatched = 0
-    failed = 0
-    for row in rows:
-        try:
-            await enqueue_task(row.task_name, key=f"outbox:{row.id}", **row.payload)
-            row.dispatched_at = datetime.now(UTC)
-            dispatched += 1
-        except Exception as err:
-            row.attempts += 1
-            row.last_error = repr(err)[:1000]
-            if row.attempts >= settings.outbox_max_attempts:
-                row.failed_at = datetime.now(UTC)
-                logger.error(
-                    "Outbox row %s permanently failed after %d attempts: %s",
-                    row.id,
-                    row.attempts,
-                    err,
-                )
-            failed += 1
-
-    await db.commit()
-    return dispatched, failed
-
-
-async def cleanup_dispatched(db: AsyncSession) -> int:
-    force_primary_var.set(True)
-    cutoff = datetime.now(UTC) - timedelta(days=settings.outbox_retention_days)
-    deleted = await db.execute(
-        delete(OutboxEvent)
-        .where(
-            OutboxEvent.dispatched_at.is_not(None),
-            OutboxEvent.dispatched_at < cutoff,
-        )
-        .returning(OutboxEvent.id)
-    )
-    await db.commit()
-    return len(deleted.scalars().all())
 
 
 def _log_relay_failure(error: Exception, failures_in_a_row: int) -> None:

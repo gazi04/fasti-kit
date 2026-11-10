@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from core.factories.user_factory import make_email
 from core.outbox import relay
 from core.outbox.model import OutboxEvent
-from core.outbox.relay import cleanup_dispatched, dispatch_pending
+from core.outbox.relay import dispatch_pending
 from core.outbox.repository import OutboxRepository
 from core.setting import get_settings
 from user.models import UserModel
@@ -163,7 +163,7 @@ async def test_dispatch_pending_skips_dispatched_and_failed_rows(
     assert [c["key"] for c in recorded_enqueue] == [f"outbox:{pending.id}"]
 
 
-async def test_cleanup_dispatched_deletes_only_old_dispatched_rows(db) -> None:
+async def test_purge_dispatched_deletes_only_old_dispatched_rows(db) -> None:
     outbox_repo = OutboxRepository(db)
     retention = get_settings().outbox_retention_days
 
@@ -174,7 +174,9 @@ async def test_cleanup_dispatched_deletes_only_old_dispatched_rows(db) -> None:
     pending = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     await db.commit()
 
-    deleted = await cleanup_dispatched(db)
+    deleted = await outbox_repo.purge_dispatched(
+        datetime.now(UTC) - timedelta(days=retention)
+    )
 
     assert deleted == 1
     surviving = {r.id for r in (await db.scalars(select(OutboxEvent))).all()}

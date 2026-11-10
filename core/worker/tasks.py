@@ -7,7 +7,7 @@ from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.database import AsyncSessionLocal
 from core.dead_letter.repository import DeadLetterJobRepository
 from core.mail import send_email
-from core.outbox.relay import cleanup_dispatched
+from core.outbox.repository import OutboxRepository
 from core.setting import get_settings
 
 logger = logging.getLogger(__name__)
@@ -49,8 +49,9 @@ async def cleanup_refresh_sessions_task(ctx):
 
 async def cleanup_outbox_task(ctx):
     logger.info("Starting background cleanup of dispatched outbox rows")
+    cutoff = datetime.now(UTC) - timedelta(days=settings.outbox_retention_days)
     async with AsyncSessionLocal() as db:
-        deleted = await cleanup_dispatched(db)
+        deleted = await OutboxRepository(db).purge_dispatched(cutoff)
     logger.info("Deleted %d dispatched outbox rows past retention", deleted)
     return {"status": "completed", "deleted": deleted}
 

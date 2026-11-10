@@ -19,6 +19,7 @@ from auth.services.email_verification_service import EmailVerificationService
 from core.database import transaction
 from core.exception import ConflictError
 from core.factories.user_factory import make_email
+from core.outbox.repository import OutboxRepository
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import CreateUserRequest
 from user.services.user_service import UserService
@@ -133,3 +134,44 @@ async def test_service_flow_commits_only_through_repository_calls(db, counts) ->
 
     primary_read, write = 1, 1
     assert counts == {"commit": primary_read + write, "rollback": 0}
+
+
+async def test_outbox_dispatch_is_one_commit_and_keeps_send_failures(
+    db, counts
+) -> None:
+    outbox = OutboxRepository(db)
+    ok = await outbox.stage_add("send_email_task", {"n": 1})
+    bad = await outbox.stage_add("send_email_task", {"n": 2})
+    counts["commit"] = 0
+
+    async def send(task_name, key, payload) -> None:
+        if key == f"outbox:{bad.id}":
+            raise RuntimeError("redis down")
+
+    dispatched, failed = await outbox.dispatch_pending(10, max_attempts=5, send=send)
+
+    assert (dispatched, failed) == (1, 1)
+    assert counts == {"commit": 1, "rollback": 0}
+    assert ok.dispatched_at is not None
+    assert bad.attempts == 1
+    assert bad.dispatched_at is None
+
+
+async def test_outbox_dispatch_rolls_back_when_the_batch_fails(
+    db, counts, monkeypatch
+) -> None:
+    outbox = OutboxRepository(db)
+    counts["commit"] = 0
+
+    async def broken_execute(*args, **kwargs):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db, "execute", broken_execute)
+
+    async def send(task_name, key, payload) -> None:
+        raise AssertionError("send must not run")
+
+    with pytest.raises(RuntimeError):
+        await outbox.dispatch_pending(10, max_attempts=5, send=send)
+
+    assert counts == {"commit": 0, "rollback": 1}

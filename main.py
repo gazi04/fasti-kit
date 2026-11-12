@@ -10,6 +10,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from auth.errors import install_auth_error_handlers
+from auth.services.password_hasher import close_password_hasher
 from core.api_versions import v1_router
 from core.database import dispose_engines
 from core.dead_letter.router import dlq_router
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
         for label, closer in (
             ("database engines", dispose_engines),
             ("redis", close_redis),
+            ("password hasher", close_password_hasher),
         ):
             try:
                 await closer()

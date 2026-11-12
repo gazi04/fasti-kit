@@ -1,8 +1,9 @@
-import asyncio
 from uuid import uuid4
 
 from bcrypt import checkpw, gensalt, hashpw
 
+from auth.services.password_hasher import password_hasher
+from core.password import fits_bcrypt
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 
@@ -18,11 +19,13 @@ def _check(password: str, hashed_password: str) -> bool:
 class SecurityService:
     @staticmethod
     async def hash_password(password: str) -> str:
-        return await asyncio.to_thread(_hash, password)
+        return await password_hasher.run(_hash, password)
 
     @staticmethod
     async def check_password(password: str, hashed_password: str) -> bool:
-        return await asyncio.to_thread(_check, password, hashed_password)
+        if not fits_bcrypt(password):
+            return False
+        return await password_hasher.run(_check, password, hashed_password)
 
     @staticmethod
     async def authenticate(

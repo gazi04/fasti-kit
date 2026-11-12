@@ -1,13 +1,42 @@
 import ipaddress
+import math
+import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from authx.types import AlgorithmType
-from pydantic import EmailStr, computed_field, field_validator, model_validator
+from pydantic import (
+    EmailStr,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DOCKER_BRIDGE_HOST_IP = "172.17.0.1"
 COMPOSE_CADDY_IP = "172.28.0.10"
+
+
+CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
+
+
+def cgroup_cpu_limit(cpu_max: Path = CGROUP_CPU_MAX) -> int | None:
+    try:
+        quota, period = cpu_max.read_text().split()
+        return max(1, math.ceil(int(quota) / int(period)))
+    except (OSError, ValueError):
+        return None
+
+
+def available_cpus() -> int:
+    visible = os.process_cpu_count() or 1
+    return min(visible, cgroup_cpu_limit() or visible)
+
+
+def _default_password_hash_workers() -> int:
+    return max(1, available_cpus() - 1)
 
 
 def _split_csv(value: str) -> list[str]:
@@ -65,6 +94,12 @@ class Settings(BaseSettings):
     outbox_max_attempts: int = 10
     outbox_retention_days: int = 7
     outbox_max_lag_seconds: float = 60.0
+
+    password_hash_workers: int = Field(
+        default_factory=_default_password_hash_workers, ge=1
+    )
+    password_hash_queue_per_worker: int = Field(default=4, ge=1)
+    password_hash_retry_after: int = Field(default=1, ge=1)
 
     dead_letter_retention_days: int = 30
     task_max_retries: int = 3

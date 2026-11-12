@@ -40,7 +40,7 @@ def _set_refresh_cookie(user_id: str, session: RefreshSession, response: Respons
     auth.set_refresh_cookies(refresh_token, response)
 
 
-@auth_router.post("/login", responses=problem_responses(401, 422, 500))
+@auth_router.post("/login", responses=problem_responses(401, 422, 500, 503))
 @limiter.limit("5/minute")
 async def login(
     data: LoginRequest,
@@ -133,7 +133,7 @@ async def forgot_password(
     }
 
 
-@auth_router.post("/reset-password")
+@auth_router.post("/reset-password", responses=problem_responses(503))
 @limiter.limit("5/minute")
 async def reset_password(
     data: ResetPasswordRequest,

@@ -5,7 +5,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from slowapi.wrappers import Limit
 
-from core.exception import EntityNotFoundError
+from core.exception import EntityNotFoundError, ServiceUnavailableError
 from core.problem import PROBLEM_MEDIA_TYPE, install_problem_handlers
 
 # Setup a dummy app for testing error handlers
@@ -22,6 +22,11 @@ async def trigger_validation(count: int):
 async def trigger_domain():
     # Use our custom domain exception
     raise EntityNotFoundError(entity_name="User", identifier="123")
+
+
+@app.get("/busy")
+async def trigger_unavailable():
+    raise ServiceUnavailableError("Busy", retry_after=3)
 
 
 @app.get("/http-error")
@@ -95,6 +100,15 @@ def test_domain_exception_returns_problem_details():
     assert data["title"] == "Entity Not Found"
     assert "User with identifier '123' was not found" in data["detail"]
     assert data["type"] == "errors/not-found"
+
+
+def test_domain_exception_headers_reach_the_response():
+    response = client.get("/busy")
+
+    assert response.status_code == 503
+    assert response.headers["content-type"] == PROBLEM_MEDIA_TYPE
+    assert response.headers["retry-after"] == "3"
+    assert response.json()["type"] == "errors/service-unavailable"
 
 
 def test_standard_http_exception_returns_problem_details():

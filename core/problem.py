@@ -123,6 +123,7 @@ async def domain_exception_handler(
         detail=exc.detail,
         type_uri=exc.type_str,
         title=exc.title,
+        headers=exc.headers,
         extensions=exc.extensions,
     )
 

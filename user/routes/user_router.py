@@ -18,6 +18,7 @@ from auth.dependencies import (
 from auth.entities.auth_session import AuthSession
 from auth.services.auth_service import AuthService
 from core.limiter import limiter
+from core.openapi import problem_responses
 from user.dependencies import get_current_user, get_user_service
 from user.entities.user import User
 from user.schemas.user_schema import (
@@ -30,7 +31,7 @@ from user.services.user_service import UserService
 user_router = APIRouter(prefix="/users", tags=["User"])
 
 
-@user_router.post("", response_model=UserResponse)
+@user_router.post("", response_model=UserResponse, responses=problem_responses(503))
 @limiter.limit("5/minute")
 async def create_user(
     data: CreateUserRequest,
@@ -48,7 +49,7 @@ async def get_user(
     return user
 
 
-@user_router.patch("/me", response_model=UserResponse)
+@user_router.patch("/me", response_model=UserResponse, responses=problem_responses(503))
 async def update_user(
     data: UpdateUserRequest,
     service: UserService = Depends(get_user_service),

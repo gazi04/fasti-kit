@@ -14,12 +14,14 @@ class DomainException(Exception):
         type_str: str = "about:blank",
         title: str | None = None,
         extensions: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ):
         self.detail = detail
         self.status_code = status_code
         self.type_str = type_str
         self.title = title
         self.extensions = extensions
+        self.headers = headers
         super().__init__(detail)
 
 
@@ -62,4 +64,15 @@ class BadRequestError(DomainException):
             status_code=400,
             type_str="errors/bad-request",
             title="Bad Request",
+        )
+
+
+class ServiceUnavailableError(DomainException):
+    def __init__(self, detail: str, retry_after: int):
+        super().__init__(
+            detail=detail,
+            status_code=503,
+            type_str="errors/service-unavailable",
+            title="Service Unavailable",
+            headers={"Retry-After": str(retry_after)},
         )

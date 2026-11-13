@@ -84,7 +84,10 @@ function login(email, ip) {
     JSON.stringify({ email, password: PASSWORD }),
     { headers: jsonHeaders(ip), tags: { name: "login" } },
   );
-  check(response, { "login 200": (r) => r.status === 200 });
+  check(response, {
+    "login 200": (r) => r.status === 200,
+    "login not shed (503)": (r) => r.status !== 503,
+  });
   return response.status === 200 ? response.json("access_token") : null;
 }
 

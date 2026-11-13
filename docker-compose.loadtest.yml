@@ -18,6 +18,9 @@ services:
       # Caddy, then k6. k6 sends a fake client IP per virtual user, so each one gets
       # its own rate-limit bucket while the limiter stays on.
       FORWARDED_ALLOW_IPS: 172.28.0.10,172.28.0.20
+      # Replicas share the host's cores and each sees all of them, so give each one
+      # bcrypt thread. The default (cores - 1 per replica) would oversubscribe the CPU.
+      PASSWORD_HASH_WORKERS: ${PASSWORD_HASH_WORKERS:-1}
 
   worker:
     environment:

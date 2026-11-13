@@ -1,5 +1,7 @@
 from pydantic import BaseModel, EmailStr
 
+from core.password import NewPassword
+
 
 class LoginRequest(BaseModel):
     """The incoming JSON payload contract for logging in."""
@@ -25,4 +27,4 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: NewPassword

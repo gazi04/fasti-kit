@@ -3,17 +3,19 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
+from core.password import NewPassword
+
 
 class CreateUserRequest(BaseModel):
     name: str
     email: EmailStr
-    password: str
+    password: NewPassword
 
 
 class UpdateUserRequest(BaseModel):
     full_name: str | None = None
     email: EmailStr | None = None
-    password: str | None = None
+    password: NewPassword | None = None
 
 
 class UserResponse(BaseModel):

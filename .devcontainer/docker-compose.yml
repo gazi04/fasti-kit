@@ -6,7 +6,7 @@ services:
     command: sleep infinity
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_NAME}
-      DATABASE_REPLICA_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-replica:5432/${DB_NAME}
+      DATABASE_REPLICA_URL: ""
       REDIS_HOST: redis
       MAIL_SERVER: mailpit
     volumes:
@@ -14,8 +14,6 @@ services:
       - devcontainer_venv:/workspaces/fasti-kit/.venv
     depends_on:
       postgres-primary:
-        condition: service_healthy
-      postgres-replica:
         condition: service_healthy
       redis:
         condition: service_healthy

@@ -5,7 +5,6 @@
   "runServices": [
     "devcontainer",
     "postgres-primary",
-    "postgres-replica",
     "redis",
     "mailpit"
   ],

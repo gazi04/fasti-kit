@@ -31,4 +31,4 @@ Run it to confirm it actually passes before reporting done:
 ```bash
 uv run pytest tests/<file>.py -v
 ```
-If the DB isn't reachable, say so explicitly (connection error, not a real test failure) rather than reporting the test as broken — check `docker compose up -d postgres-primary postgres-replica` first if needed.
+If the DB isn't reachable, say so explicitly (connection error, not a real test failure) rather than reporting the test as broken — check `docker compose up -d postgres-primary` first if needed.

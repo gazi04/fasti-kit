@@ -12,7 +12,7 @@ Project skills in `.claude/skills/`: `/refresh-claude-md` (this file), `/scaffol
 
 ## Commands
 
-Environment is managed with `uv` (Python >=3.13, package name `fasti-kit`, installed as a package via `[tool.uv] package = true`). A `Justfile` wraps the common ones (`just dev`, `just worker`, `just test`, `just lint`, `just lint-fix`, `just format`, `just pre-commit`, `just migrate "msg"`, `just seed`, `just scaffold-smoke`, `just docker`, `just docker-app`, `just loadtest`, `just loadtest-down`). Note `just dev` first starts the infra containers (postgres primary/replica, redis, mailpit, dozzle, caddy) and then runs `uvicorn --reload --host 0.0.0.0`, unlike `uv run main.py`'s `SERVER_HOSTS` binding.
+Environment is managed with `uv` (Python >=3.13, package name `fasti-kit`, installed as a package via `[tool.uv] package = true`). A `Justfile` wraps the common ones (`just dev`, `just worker`, `just test`, `just lint`, `just lint-fix`, `just format`, `just pre-commit`, `just migrate "msg"`, `just seed`, `just scaffold-smoke`, `just docker`, `just docker-full`, `just docker-app`, `just loadtest`, `just loadtest-down`). Note `just dev` first starts the base infra containers (postgres-primary, redis, mailpit; set `COMPOSE_PROFILES` to add more) and then runs `uvicorn --reload --host 0.0.0.0`, unlike `uv run main.py`'s `SERVER_HOSTS` binding.
 
 ```bash
 # Run the dev server — uvicorn, uvloop, reads .env via core/setting.py. Listens on every address
@@ -26,10 +26,15 @@ uv run main.py
 # and it also runs the outbox relay (see core/outbox below)
 uv run saq core.worker.main.settings
 
-# Infra via docker-compose: postgres-primary (host 5433), postgres-replica (5434),
-# redis, mailpit (SMTP catcher, UI at :8025), pgadmin (:8888), prometheus (:9090),
-# grafana (:3000), dozzle (:8008 log viewer), caddy (reverse proxy w/ *.fasti.localhost hosts,
-# upstream set by API_UPSTREAM, default host.docker.internal:8000). The default network is pinned
+# Infra via docker-compose. A plain `docker compose up -d` starts only the base: postgres-primary
+# (host 5433), redis, mailpit (SMTP catcher, UI at :8025). Everything else is behind a profile,
+# and `--profile full` (`just docker-full`) starts all of them: `replica` → postgres-replica (5434;
+# set DATABASE_REPLICA_URL to use it, unset reads go to the primary), `tools` → pgadmin (:8888),
+# `observability` → prometheus (:9090), grafana (:3000), dozzle (:8008 log viewer), `gateway` →
+# caddy (reverse proxy w/ *.fasti.localhost hosts, upstream set by API_UPSTREAM, default
+# host.docker.internal:8000). The `app`/`worker` services set DATABASE_REPLICA_URL to "" (primary
+# only); docker-compose.loadtest.yml resets the replica/caddy/prometheus profiles and points the
+# replicas at postgres-replica. The default network is pinned
 # to 172.28.0.0/16 with caddy at 172.28.0.10 — the `app` service's FORWARDED_ALLOW_IPS trusts
 # exactly that IP, and so does the local default (see Request pipeline), so don't change one
 # without the others.

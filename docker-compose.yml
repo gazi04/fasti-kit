@@ -28,6 +28,7 @@ services:
 
   postgres-replica:
     logging: *default-logging
+    profiles: ["replica", "full"]
     image: bitnami/postgresql:latest
     container_name: fasti-postgres-replica
     environment:
@@ -51,6 +52,7 @@ services:
 
   pgadmin:
     logging: *default-logging
+    profiles: ["tools", "full"]
     image: dpage/pgadmin4:8
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
@@ -59,8 +61,6 @@ services:
       - "8888:80"
     depends_on:
       postgres-primary:
-        condition: service_healthy
-      postgres-replica:
         condition: service_healthy
     volumes:
       - pgadmin_data:/var/lib/pgadmin
@@ -102,6 +102,7 @@ services:
 
   dozzle:
     logging: *default-logging
+    profiles: ["observability", "full"]
     image: amir20/dozzle:latest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -111,6 +112,7 @@ services:
 
   prometheus:
     logging: *default-logging
+    profiles: ["observability", "full"]
     image: prom/prometheus:latest
     container_name: fasti-prometheus
     ports:
@@ -126,6 +128,7 @@ services:
 
   grafana:
     logging: *default-logging
+    profiles: ["observability", "full"]
     image: grafana/grafana:latest
     container_name: fasti-grafana
     ports:
@@ -138,6 +141,7 @@ services:
 
   caddy:
     logging: *default-logging
+    profiles: ["gateway", "full"]
     image: caddy:2-alpine
     container_name: fasti_gateway
     environment:
@@ -167,7 +171,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_NAME}
-      DATABASE_REPLICA_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-replica:5432/${DB_NAME}
+      DATABASE_REPLICA_URL: ""
       REDIS_HOST: redis
       MAIL_SERVER: mailpit
       RUN_MIGRATIONS: "true"
@@ -176,8 +180,6 @@ services:
       - "8000:8000"
     depends_on:
       postgres-primary:
-        condition: service_healthy
-      postgres-replica:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -193,7 +195,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_NAME}
-      DATABASE_REPLICA_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-replica:5432/${DB_NAME}
+      DATABASE_REPLICA_URL: ""
       REDIS_HOST: redis
       MAIL_SERVER: mailpit
     command: ["saq", "core.worker.main.settings"]

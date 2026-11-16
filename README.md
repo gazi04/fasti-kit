@@ -219,8 +219,8 @@ uv sync
 # 2. copy env config and fill in the blanks (JWT secret, DB creds, etc.)
 cp .env.example .env
 
-# 3. start infra: postgres primary+replica, redis, mailpit (SMTP catcher)
-docker compose up -d postgres-primary postgres-replica redis mailpit
+# 3. start infra: postgres, redis, mailpit (SMTP catcher)
+docker compose up -d
 
 # 4. apply migrations
 uv run alembic upgrade head
@@ -235,12 +235,26 @@ uv run main.py                       # http://127.0.0.1:8000
 uv run saq core.worker.main.settings
 ```
 
-The rest of the docker-compose stack (`pgadmin`, `prometheus`, `grafana`, `dozzle`,
-`caddy`) is optional and can be brought up the same way when you need it:
+A plain `docker compose up -d` starts only `postgres-primary`, `redis` and `mailpit`. The rest
+of the stack is optional and sits behind Compose profiles:
+
+| Profile | Services |
+|---|---|
+| `replica` | `postgres-replica` (host port 5434) |
+| `tools` | `pgadmin` |
+| `observability` | `prometheus`, `grafana`, `dozzle` |
+| `gateway` | `caddy` |
+| `full` | all of the above |
 
 ```bash
-docker compose up -d pgadmin prometheus grafana dozzle caddy
+docker compose --profile observability up -d   # one group
+docker compose --profile full up -d            # everything, or: just docker-full
+COMPOSE_PROFILES=gateway just dev              # just dev starts only the base otherwise
 ```
+
+Without the replica, reads go to the primary: leave `DATABASE_REPLICA_URL` unset. To use the
+replica, start the `replica` profile and set
+`DATABASE_REPLICA_URL=postgresql+asyncpg://…@localhost:5434/<db>` in `.env`.
 
 | Service | URL |
 |---|---|
@@ -263,8 +277,9 @@ docker-compose --profile app up -d --build   # or: just docker-app
 ```
 
 This builds and runs the app plus the SAQ worker as containers (`fasti-app`, `fasti-worker`),
-pointed at the same `postgres-primary`/`postgres-replica`/`redis`/`mailpit` services over the
-Compose network, and runs `alembic upgrade head` on boot. To have the `caddy` gateway route
+pointed at the same `postgres-primary`/`redis`/`mailpit` services over the Compose network,
+and runs `alembic upgrade head` on boot. Both containers read from the primary only
+(`DATABASE_REPLICA_URL` is set to empty); the load-test overlay points them at the replica. To have the `caddy` gateway route
 `api.fasti.localhost` to the dockerized app instead of the host process, set
 `API_UPSTREAM=app:8000` in `.env` and restart `caddy`.
 
@@ -310,14 +325,14 @@ reachable through the proxy alone.
 ### Dev container (optional)
 
 `.devcontainer/` sets up the whole toolchain for VS Code, Codespaces or any Dev Containers
-client: Python 3.13, `uv`, and the compose infra (`postgres-primary`, `postgres-replica`,
-`redis`, `mailpit`) on the same network, so the app reaches them by service name rather than
+client: Python 3.13, `uv`, and the compose infra (`postgres-primary`, `redis`, `mailpit`) on
+the same network, so the app reaches them by service name rather than
 `localhost`. On first create it installs dependencies, fills in `JWT_SECRET_KEY` in `.env` if
 it is empty, creates the `fasti_kit_test` database, runs migrations and installs the pre-commit
 hooks. Then `uv run main.py` and `uv run pytest` work as usual.
 
 Copying `.env.example` to `.env` runs on the host, so use Linux, macOS or WSL. The compose
-services still publish their usual host ports (5433, 5434, 6379, 1025, 8025), so stop any
+services still publish their usual host ports (5433, 6379, 1025, 8025), so stop any
 infra you already have running before opening the container. The container has no Docker
 CLI, so `just dev` and `just docker` aren't available inside it.
 

@@ -21,7 +21,7 @@ uv run pytest
 ```
 
 Notes:
-- `pytest` needs a reachable Postgres at `DATABASE_URL` with `fasti_kit_test` as the db name (see `tests/conftest.py`) — if it fails to even connect (not a test failure, a connection error), say so explicitly rather than reporting it as failing tests. Don't try to start docker services yourself; ask the user to bring them up (`docker compose up -d postgres-primary postgres-replica redis mailpit`) if the DB is unreachable.
+- `pytest` needs a reachable Postgres at `DATABASE_URL` with `fasti_kit_test` as the db name (see `tests/conftest.py`) — if it fails to even connect (not a test failure, a connection error), say so explicitly rather than reporting it as failing tests. Don't try to start docker services yourself; ask the user to bring them up (`docker compose up -d postgres-primary redis mailpit`) if the DB is unreachable.
 - `ruff format .` (no `--check`) would rewrite files — don't run that variant here, this skill only reports.
 - `lint-imports` failures point at `pyproject.toml`'s `[tool.importlinter]` contracts — a failure here usually means a new domain or module bypassed the DDD layering (see `scaffold-domain` skill if it's a newly added domain missing from the contracts entirely, vs. a genuine layering violation in existing code).
 

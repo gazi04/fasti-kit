@@ -251,7 +251,7 @@ def create_test(
     except (OSError, subprocess.TimeoutExpired) as exc:
         console.print(
             f"[yellow]Could not auto-run pytest ({exc}). Bring up the test DB with "
-            f"'docker compose up -d postgres-primary postgres-replica' and run "
+            f"'docker compose up -d postgres-primary' and run "
             f"'uv run pytest {test_path}' yourself.[/yellow]"
         )
 

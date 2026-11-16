@@ -214,9 +214,7 @@ async def test_overlong_password_never_matches_and_skips_bcrypt(
     async def must_not_run(*args, **kwargs):
         raise AssertionError("bcrypt must not run for an overlong password")
 
-    monkeypatch.setattr(
-        "auth.services.security_service.password_hasher.run", must_not_run
-    )
+    monkeypatch.setattr("auth.services.security_service.run_in_thread", must_not_run)
 
     overlong = "a" * (BCRYPT_MAX_PASSWORD_BYTES + 1)
     assert await SecurityService.check_password(overlong, hashed) is False
@@ -233,7 +231,7 @@ def _disable_rate_limiting():
 def full_hasher(monkeypatch):
     instance = PasswordHasher(workers=1, queue_per_worker=1, retry_after=2)
     instance._pending = instance.max_pending
-    monkeypatch.setattr("auth.services.security_service.password_hasher", instance)
+    monkeypatch.setattr("auth.services.security_service.run_in_thread", instance.run)
     return instance
 
 

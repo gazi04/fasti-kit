@@ -1,3 +1,4 @@
+import asyncio
 from uuid import uuid4
 
 from bcrypt import checkpw, gensalt, hashpw
@@ -16,16 +17,20 @@ def _check(password: str, hashed_password: str) -> bool:
     return checkpw(password.encode(), hashed_password.encode())
 
 
+run_in_thread = asyncio.to_thread
+run_in_thread = password_hasher.run
+
+
 class SecurityService:
     @staticmethod
     async def hash_password(password: str) -> str:
-        return await password_hasher.run(_hash, password)
+        return await run_in_thread(_hash, password)
 
     @staticmethod
     async def check_password(password: str, hashed_password: str) -> bool:
         if not fits_bcrypt(password):
             return False
-        return await password_hasher.run(_check, password, hashed_password)
+        return await run_in_thread(_check, password, hashed_password)
 
     @staticmethod
     async def authenticate(

@@ -1,14 +1,51 @@
 import asyncio
 import contextvars
+import math
+import os
 import secrets
 import threading
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 
 from prometheus_client import Counter, Gauge
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from core.exception import ServiceUnavailableError
-from core.setting import get_settings
+
+CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
+
+
+def cgroup_cpu_limit(cpu_max: Path = CGROUP_CPU_MAX) -> int | None:
+    try:
+        quota, period = cpu_max.read_text().split()
+        return max(1, math.ceil(int(quota) / int(period)))
+    except (OSError, ValueError):
+        return None
+
+
+def available_cpus() -> int:
+    visible = os.process_cpu_count() or 1
+    return min(visible, cgroup_cpu_limit() or visible)
+
+
+def _default_workers() -> int:
+    return max(1, available_cpus() - 1)
+
+
+class PasswordHashSettings(BaseSettings):
+    workers: int = Field(default_factory=_default_workers, ge=1)
+    queue_per_worker: int = Field(default=4, ge=1)
+    retry_after: int = Field(default=1, ge=1)
+
+    model_config = SettingsConfigDict(
+        env_prefix="PASSWORD_HASH_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
 
 REJECTED = Counter(
     "password_hash_rejected_total",
@@ -79,11 +116,9 @@ class PasswordHasher:
 
 
 def _build_password_hasher() -> PasswordHasher:
-    settings = get_settings()
+    settings = PasswordHashSettings()
     return PasswordHasher(
-        settings.password_hash_workers,
-        settings.password_hash_queue_per_worker,
-        settings.password_hash_retry_after,
+        settings.workers, settings.queue_per_worker, settings.retry_after
     )
 
 

@@ -10,13 +10,12 @@ from prometheus_client import REGISTRY
 from sqlalchemy import func, select
 
 from auth.models import RefreshSessionModel
-from auth.services.password_hasher import PasswordHasher
+from auth.services.password_hasher import PasswordHasher, cgroup_cpu_limit
 from auth.services.security_service import SecurityService
 from core.exception import ServiceUnavailableError
 from core.factories.user_factory import make_email
 from core.limiter import limiter
 from core.password import BCRYPT_MAX_PASSWORD_BYTES
-from core.setting import cgroup_cpu_limit
 from user.repositories.user_repository import UserRepository
 
 LOGIN_URL = "/api/v1/auth/login"

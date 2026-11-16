@@ -1,0 +1,36 @@
+_min_copier_version: "9.4.0"
+
+_templates_suffix: ""
+_preserve_symlinks: true
+
+_envops:
+  block_start_string: "<%"
+  block_end_string: "%>"
+  variable_start_string: "[[="
+  variable_end_string: "=]]"
+  comment_start_string: "<#"
+  comment_end_string: "#>"
+  line_statement_prefix: "# %"
+  keep_trailing_newline: true
+
+_exclude:
+  - copier.yml
+  - "~*"
+  - "*.py[co]"
+  - __pycache__
+  - .git
+  - .DS_Store
+  - docs/addons.md
+  - "<% if not bcrypt_pool %>auth/services/password_hasher.py<% endif %>"
+  - "<% if not bcrypt_pool %>tests/test_password_hasher.py<% endif %>"
+
+_tasks:
+  - uv run --frozen ruff check --fix --select I --quiet .
+  - uv run --frozen ruff format --quiet .
+
+bcrypt_pool:
+  type: bool
+  default: false
+  help: >-
+    Bounded thread pool for bcrypt. Past the limit, password operations get a 503
+    with Retry-After instead of queueing. Without it, hashing uses asyncio.to_thread.

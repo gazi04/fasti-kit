@@ -3,7 +3,10 @@ from uuid import uuid4
 
 from bcrypt import checkpw, gensalt, hashpw
 
+# % if bcrypt_pool
 from auth.services.password_hasher import password_hasher
+
+# % endif
 from core.password import fits_bcrypt
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
@@ -18,7 +21,9 @@ def _check(password: str, hashed_password: str) -> bool:
 
 
 run_in_thread = asyncio.to_thread
+# % if bcrypt_pool
 run_in_thread = password_hasher.run
+# % endif
 
 
 class SecurityService:

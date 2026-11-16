@@ -42,6 +42,7 @@ stays coherent as it grows past the two example domains (`auth`, `user`) it ship
   - [Background jobs and the outbox](#background-jobs-and-the-outbox)
   - [Caching, rate limiting, pagination](#caching-rate-limiting-pagination)
   - [Auth](#auth)
+- [Starting a new project from this template](#starting-a-new-project-from-this-template)
 - [Getting started](#getting-started)
 - [Scaffolding a new domain](#scaffolding-a-new-domain)
 - [API overview](#api-overview)
@@ -207,6 +208,28 @@ leaking which emails are registered. Auth keeps its own revoked-token table — 
 for logout/delete token revocation and for one-time email-verification/password-reset
 tokens — but reads user data through `user`'s repository rather than owning user
 storage itself.
+
+## Starting a new project from this template
+
+The repo is a [Copier](https://copier.readthedocs.io/) template. The base is always included;
+the heavier parts are add-ons you choose when you generate the project, or add later.
+
+```bash
+uvx copier copy --trust gh:gazi04/fasti-kit my-app      # asks which add-ons to include
+
+cd my-app
+uvx copier update --trust --data bcrypt_pool=true      # add an add-on later
+```
+
+`--trust` lets Copier run its post-generation `ruff` pass. `copier update` leaves the change as
+a normal diff, so review it with `git diff` before committing.
+
+| Add-on | Question | What it adds |
+|---|---|---|
+| bcrypt pool | `bcrypt_pool` | A bounded thread pool for password hashing. Past the limit, logins get a 503 with `Retry-After` instead of queueing. Without it, hashing uses `asyncio.to_thread`. |
+
+More add-ons are planned: the Redis token blocklist, the dead-letter queue, the outbox and
+the read replica.
 
 ## Getting started
 

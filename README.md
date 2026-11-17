@@ -227,9 +227,9 @@ a normal diff, so review it with `git diff` before committing.
 | Add-on | Question | What it adds |
 |---|---|---|
 | bcrypt pool | `bcrypt_pool` | A bounded thread pool for password hashing. Past the limit, logins get a 503 with `Retry-After` instead of queueing. Without it, hashing uses `asyncio.to_thread`. |
+| Redis token blocklist | `redis_blocklist` | Caches revoked token ids in Redis, so an authenticated request checks Redis instead of the database. Without it, every request reads the `revoked_tokens` table, which stays the source of truth either way. |
 
-More add-ons are planned: the Redis token blocklist, the dead-letter queue, the outbox and
-the read replica.
+More add-ons are planned: the dead-letter queue, the outbox and the read replica.
 
 ## Getting started
 

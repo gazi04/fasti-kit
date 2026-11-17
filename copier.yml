@@ -23,6 +23,8 @@ _exclude:
   - docs/addons.md
   - "<% if not bcrypt_pool %>auth/services/password_hasher.py<% endif %>"
   - "<% if not bcrypt_pool %>tests/test_password_hasher.py<% endif %>"
+  - "<% if not redis_blocklist %>auth/redis_blocklist.py<% endif %>"
+  - "<% if not redis_blocklist %>tests/test_redis_blocklist.py<% endif %>"
 
 _tasks:
   - uv run --frozen ruff check --fix --select I --quiet .
@@ -34,3 +36,10 @@ bcrypt_pool:
   help: >-
     Bounded thread pool for bcrypt. Past the limit, password operations get a 503
     with Retry-After instead of queueing. Without it, hashing uses asyncio.to_thread.
+
+redis_blocklist:
+  type: bool
+  default: false
+  help: >-
+    Cache revoked token ids in Redis, so an authenticated request checks Redis instead
+    of the database. Without it, every request reads the revoked_tokens table.

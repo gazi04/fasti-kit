@@ -7,9 +7,13 @@ from authx import AuthX, AuthXConfig, JWTDecodeError, TokenPayload
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.blocklist import TokenBlocklist
+from auth.blocklist import NullTokenBlocklist, TokenBlocklist
 from auth.entities.auth_session import AuthSession, TokenRef
+
+# % if redis_blocklist
 from auth.redis_blocklist import redis_blocklist
+
+# % endif
 from auth.repositories.account_repository import AccountRepository
 from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
@@ -32,7 +36,10 @@ config = AuthXConfig(
 )
 
 auth = AuthX(config=config)
-blocklist: TokenBlocklist = redis_blocklist
+blocklist: TokenBlocklist = NullTokenBlocklist()
+# % if redis_blocklist
+blocklist = redis_blocklist
+# % endif
 
 
 async def is_token_revoked(token: str, **kwargs: Any) -> bool:

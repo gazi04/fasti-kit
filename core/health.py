@@ -6,10 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 
 from core.database import primary_engine, replica_engine
-from core.outbox.dependencies import get_outbox_repository
-from core.outbox.relay import RELAY_HEARTBEAT_KEY
-from core.outbox.repository import OutboxRepository
-from core.outbox.settings import get_outbox_settings
+from core.outbox.health import outbox_checks
 from core.queue import redis, task_queue
 
 logger = logging.getLogger(__name__)
@@ -39,16 +36,11 @@ async def _check_worker() -> None:
         raise RuntimeError("no active SAQ worker")
 
 
-async def _check_relay_heartbeat() -> None:
-    if not await redis.exists(RELAY_HEARTBEAT_KEY):
-        raise RuntimeError("outbox relay heartbeat missing")
+async def _no_extra_checks() -> dict[str, Awaitable[None]]:
+    return {}
 
 
-async def _check_outbox_backlog(outbox: OutboxRepository) -> None:
-    age = await outbox.oldest_pending_age()
-    max_lag = get_outbox_settings().max_lag_seconds
-    if age is not None and age > max_lag:
-        raise RuntimeError(f"oldest pending outbox row is {age:.0f}s old")
+worker_checks = outbox_checks
 
 
 async def _run_checks(
@@ -100,17 +92,16 @@ async def readiness(response: Response) -> dict:
 @health_router.get("/workers")
 async def workers(
     response: Response,
-    outbox: OutboxRepository = Depends(get_outbox_repository),
+    extra_checks: Mapping[str, Awaitable[None]] = Depends(worker_checks),
 ) -> dict:
-    """Validates the SAQ worker is up and the outbox relay is alive and keeping up.
+    """Validates the SAQ worker is up, plus any add-on's background checks.
 
     Kept apart from /ready so a dead worker does not pull API instances out of rotation.
     """
     return await _run_checks(
         {
             "worker": _check_worker(),
-            "outbox_relay": _check_relay_heartbeat(),
-            "outbox_backlog": _check_outbox_backlog(outbox),
+            **extra_checks,
         },
         response,
     )

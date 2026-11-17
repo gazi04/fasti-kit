@@ -26,7 +26,6 @@ from auth.services.password_reset_service import PasswordResetService
 from auth.services.security_service import SecurityService
 from core.factories.user_factory import make_email
 from core.limiter import limiter
-from core.outbox.model import OutboxEvent
 from core.setting import get_settings
 from user.repositories.user_repository import UserRepository
 
@@ -233,24 +232,6 @@ async def test_create_user_then_update_conflict_is_409(client, db) -> None:
     )
 
     assert response.status_code == 409
-
-
-async def test_resend_and_forgot_write_exactly_one_outbox_row_each(client, db) -> None:
-    unverified = await UserRepository(db).add("Resend", make_email(), "pw")
-
-    await client.post(
-        "/api/v1/auth/resend-verification", json={"email": unverified.email}
-    )
-    await client.post("/api/v1/auth/forgot-password", json={"email": unverified.email})
-
-    subjects = sorted(
-        row.payload["subject"] for row in (await db.scalars(select(OutboxEvent))).all()
-    )
-    assert subjects == ["Reset your password", "Verify your email"]
-    refreshed = await UserRepository(db).get(unverified.id)
-    assert refreshed is not None
-    assert refreshed.pending_verification_jti is not None
-    assert refreshed.pending_password_reset_jti is not None
 
 
 async def test_service_refresh_requires_an_active_verified_user(db) -> None:

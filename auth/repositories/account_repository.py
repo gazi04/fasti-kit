@@ -7,8 +7,8 @@ from auth.entities.auth_session import TokenRef
 from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.database import transaction
+from core.deferred_tasks import task_stager
 from core.exception import EntityNotFoundError
-from core.outbox.repository import OutboxRepository
 from user.entities.user import User
 from user.repositories.user_repository import UserRepository
 
@@ -19,7 +19,7 @@ class AccountRepository:
         self._users = UserRepository(db)
         self._tokens = RevokedTokenRepository(db)
         self._sessions = RefreshSessionRepository(db)
-        self._outbox = OutboxRepository(db)
+        self._tasks = task_stager(db)
 
     async def verify_email(self, user_id: UUID, jti: str, expires_at: datetime) -> User:
         async with transaction(self.db):
@@ -47,7 +47,7 @@ class AccountRepository:
             user = await self._users.stage_update(user_id, pending_verification_jti=jti)
             if user is None:
                 raise EntityNotFoundError("User", str(user_id))
-            await self._outbox.stage_add("send_email_task", email_payload)
+            await self._tasks.stage_add("send_email_task", email_payload)
 
     async def start_password_reset(
         self, user_id: UUID, jti: str, email_payload: dict[str, Any]
@@ -58,7 +58,7 @@ class AccountRepository:
             )
             if user is None:
                 raise EntityNotFoundError("User", str(user_id))
-            await self._outbox.stage_add("send_email_task", email_payload)
+            await self._tasks.stage_add("send_email_task", email_payload)
 
     async def logout(
         self,

@@ -85,7 +85,9 @@ async def test_a_failed_repository_write_rolls_back_without_committing(
     assert counts == {"commit": 0, "rollback": 1}
 
 
-async def test_register_writes_user_and_outbox_in_a_single_commit(db, counts) -> None:
+async def test_register_writes_user_and_its_email_task_in_a_single_commit(
+    db, counts
+) -> None:
     service = UserService(UserRepository(db))
 
     await service.register(
@@ -136,6 +138,15 @@ async def test_service_flow_commits_only_through_repository_calls(db, counts) ->
     assert counts == {"commit": primary_read + write, "rollback": 0}
 
 
+async def test_user_purge_is_one_commit(db, counts) -> None:
+    await UserRepository(db).add("Purge", make_email(), "pw")
+    counts["commit"] = 0
+
+    assert await UserRepository(db).purge_all() >= 1
+    assert counts == {"commit": 1, "rollback": 0}
+    assert await UserRepository(db).count() == 0
+
+
 async def test_outbox_dispatch_is_one_commit_and_keeps_send_failures(
     db, counts
 ) -> None:
@@ -177,13 +188,7 @@ async def test_outbox_dispatch_rolls_back_when_the_batch_fails(
     assert counts == {"commit": 0, "rollback": 1}
 
 
-async def test_outbox_purge_and_user_purge_are_one_commit_each(db, counts) -> None:
-    await UserRepository(db).add("Purge", make_email(), "pw")
-    counts["commit"] = 0
-
+async def test_outbox_purge_is_one_commit(db, counts) -> None:
     await OutboxRepository(db).purge_dispatched(datetime.now(UTC))
-    assert counts["commit"] == 1
 
-    assert await UserRepository(db).purge_all() >= 1
-    assert counts == {"commit": 2, "rollback": 0}
-    assert await UserRepository(db).count() == 0
+    assert counts == {"commit": 1, "rollback": 0}

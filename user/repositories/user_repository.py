@@ -8,8 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from core.database import force_primary_var, transaction
+from core.deferred_tasks import task_stager
 from core.exception import ConflictError
-from core.outbox.repository import OutboxRepository
 from user.entities.user import User
 from user.models import UserModel
 
@@ -17,7 +17,7 @@ from user.models import UserModel
 class UserRepository:
     def __init__(self, db) -> None:
         self.db: AsyncSession = db
-        self._outbox = OutboxRepository(db)
+        self._tasks = task_stager(db)
 
     async def add(self, full_name: str, email: str, password_hash: str) -> User:
         async with transaction(self.db):
@@ -41,7 +41,7 @@ class UserRepository:
                 id=id,
                 pending_verification_jti=pending_verification_jti,
             )
-            await self._outbox.stage_add("send_email_task", email_payload)
+            await self._tasks.stage_add("send_email_task", email_payload)
             return user
 
     async def get(self, id: UUID, *, consistent: bool = False) -> User | None:

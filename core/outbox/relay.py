@@ -6,15 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import AsyncSessionLocal
 from core.outbox.repository import OutboxRepository
+from core.outbox.settings import get_outbox_settings
 from core.queue import enqueue_task
 from core.redis import redis
-from core.setting import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+settings = get_outbox_settings()
 
 RELAY_HEARTBEAT_KEY = "outbox:relay:heartbeat"
-RELAY_HEARTBEAT_TTL = max(30, int(6 * settings.outbox_poll_interval))
+RELAY_HEARTBEAT_TTL = max(30, int(6 * settings.poll_interval))
 
 
 async def _enqueue(task_name: str, key: str, payload: dict[str, Any]) -> None:
@@ -23,7 +23,7 @@ async def _enqueue(task_name: str, key: str, payload: dict[str, Any]) -> None:
 
 async def dispatch_pending(db: AsyncSession, *, batch_size: int) -> tuple[int, int]:
     return await OutboxRepository(db).dispatch_pending(
-        batch_size, max_attempts=settings.outbox_max_attempts, send=_enqueue
+        batch_size, max_attempts=settings.max_attempts, send=_enqueue
     )
 
 
@@ -48,7 +48,7 @@ async def relay_loop() -> None:
         try:
             async with AsyncSessionLocal() as db:
                 dispatched, failed = await dispatch_pending(
-                    db, batch_size=settings.outbox_batch_size
+                    db, batch_size=settings.batch_size
                 )
             await redis.set(RELAY_HEARTBEAT_KEY, "1", ex=RELAY_HEARTBEAT_TTL)
         except Exception as error:
@@ -64,4 +64,4 @@ async def relay_loop() -> None:
             if dispatched or failed:
                 logger.info("Outbox relay: dispatched=%d failed=%d", dispatched, failed)
 
-        await asyncio.sleep(settings.outbox_poll_interval)
+        await asyncio.sleep(settings.poll_interval)

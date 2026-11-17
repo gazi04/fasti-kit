@@ -9,7 +9,7 @@ from core.outbox import relay
 from core.outbox.model import OutboxEvent
 from core.outbox.relay import dispatch_pending
 from core.outbox.repository import OutboxRepository
-from core.setting import get_settings
+from core.outbox.settings import get_outbox_settings
 from user.models import UserModel
 from user.repositories.user_repository import UserRepository
 
@@ -133,7 +133,7 @@ async def test_dispatch_pending_parks_row_after_max_attempts(db, monkeypatch) ->
     monkeypatch.setattr(relay, "enqueue_task", _boom)
 
     row = await OutboxRepository(db).stage_add("send_email_task", PAYLOAD)
-    row.attempts = get_settings().outbox_max_attempts - 1
+    row.attempts = get_outbox_settings().max_attempts - 1
     await db.commit()
 
     _, failed = await dispatch_pending(db, batch_size=10)
@@ -165,7 +165,7 @@ async def test_dispatch_pending_skips_dispatched_and_failed_rows(
 
 async def test_purge_dispatched_deletes_only_old_dispatched_rows(db) -> None:
     outbox_repo = OutboxRepository(db)
-    retention = get_settings().outbox_retention_days
+    retention = get_outbox_settings().retention_days
 
     old = await outbox_repo.stage_add("send_email_task", PAYLOAD)
     old.dispatched_at = datetime.now(UTC) - timedelta(days=retention + 1)

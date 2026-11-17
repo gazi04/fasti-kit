@@ -1,17 +1,12 @@
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
 
 from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.database import AsyncSessionLocal
-from core.dead_letter.repository import DeadLetterJobRepository
 from core.mail import send_email
-from core.outbox.repository import OutboxRepository
-from core.setting import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
 async def process_welcome_email(ctx, user_id: int, email: str):
@@ -44,24 +39,4 @@ async def cleanup_refresh_sessions_task(ctx):
     async with AsyncSessionLocal() as db:
         deleted = await RefreshSessionRepository(db).purge_expired()
     logger.info("Deleted %d expired refresh sessions", deleted)
-    return {"status": "completed", "deleted": deleted}
-
-
-async def cleanup_outbox_task(ctx):
-    logger.info("Starting background cleanup of dispatched outbox rows")
-    cutoff = datetime.now(UTC) - timedelta(days=settings.outbox_retention_days)
-    async with AsyncSessionLocal() as db:
-        deleted = await OutboxRepository(db).purge_dispatched(cutoff)
-    logger.info("Deleted %d dispatched outbox rows past retention", deleted)
-    return {"status": "completed", "deleted": deleted}
-
-
-async def cleanup_dead_letter_task(ctx):
-    logger.info("Starting background cleanup of retried dead-letter rows")
-    cutoff = datetime.now(UTC) - timedelta(days=settings.dead_letter_retention_days)
-    async with AsyncSessionLocal() as db:
-        deleted = await DeadLetterJobRepository(db).purge(
-            before=cutoff, only_retried=True
-        )
-    logger.info("Deleted %d retried dead-letter rows past retention", deleted)
     return {"status": "completed", "deleted": deleted}

@@ -65,13 +65,6 @@ class Settings(BaseSettings):
     # before force-cancelling them.
     shutdown_timeout: int = 30
 
-    outbox_poll_interval: float = 5.0
-    outbox_batch_size: int = 100
-    outbox_max_attempts: int = 10
-    outbox_retention_days: int = 7
-    outbox_max_lag_seconds: float = 60.0
-
-    dead_letter_retention_days: int = 30
     task_max_retries: int = 3
     task_retry_delay: float = 5.0
     task_retry_backoff: bool = True

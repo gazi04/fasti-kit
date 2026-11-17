@@ -5,15 +5,15 @@ from saq import CronJob
 
 from core.database import dispose_engines
 from core.dead_letter.hook import record_dead_letter
+from core.dead_letter.tasks import cleanup_dead_letter_task
 from core.logging.setup import setup_logging
 from core.middlewares.correlation import request_id_context
 from core.outbox.relay import relay_loop
+from core.outbox.tasks import cleanup_outbox_task
 from core.queue import task_queue
 from core.redis import close_redis
 
 from .tasks import (
-    cleanup_dead_letter_task,
-    cleanup_outbox_task,
     cleanup_refresh_sessions_task,
     cleanup_revoked_tokens_task,
     process_welcome_email,

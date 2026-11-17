@@ -9,8 +9,8 @@ from core.database import primary_engine, replica_engine
 from core.outbox.dependencies import get_outbox_repository
 from core.outbox.relay import RELAY_HEARTBEAT_KEY
 from core.outbox.repository import OutboxRepository
+from core.outbox.settings import get_outbox_settings
 from core.queue import redis, task_queue
-from core.setting import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ async def _check_relay_heartbeat() -> None:
 
 async def _check_outbox_backlog(outbox: OutboxRepository) -> None:
     age = await outbox.oldest_pending_age()
-    max_lag = get_settings().outbox_max_lag_seconds
+    max_lag = get_outbox_settings().max_lag_seconds
     if age is not None and age > max_lag:
         raise RuntimeError(f"oldest pending outbox row is {age:.0f}s old")
 

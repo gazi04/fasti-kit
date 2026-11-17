@@ -63,7 +63,7 @@ async def test_relay_heartbeat_present_passes(clean_heartbeat) -> None:
 
 async def test_relay_loop_writes_heartbeat(db, monkeypatch, clean_heartbeat) -> None:
     monkeypatch.setattr("core.outbox.relay.AsyncSessionLocal", lambda: _Ctx(db))
-    monkeypatch.setattr("core.outbox.relay.settings.outbox_poll_interval", 0.01)
+    monkeypatch.setattr("core.outbox.relay.settings.poll_interval", 0.01)
 
     task = asyncio.create_task(relay_loop())
     try:
@@ -98,7 +98,7 @@ async def test_relay_loop_logs_one_traceback_per_failure_streak(
 
     monkeypatch.setattr("core.outbox.relay.AsyncSessionLocal", lambda: _Ctx(None))
     monkeypatch.setattr("core.outbox.relay.dispatch_pending", flaky_dispatch)
-    monkeypatch.setattr("core.outbox.relay.settings.outbox_poll_interval", 0.01)
+    monkeypatch.setattr("core.outbox.relay.settings.poll_interval", 0.01)
 
     with caplog.at_level("INFO", logger="core.outbox.relay"):
         task = asyncio.create_task(relay_loop())

@@ -6,9 +6,15 @@ from authx import TokenPayload
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 import auth.dependencies as auth_dependencies
-from auth.blocklist import JTI_KEY_PREFIX, READY_KEY, SEEDING_KEY, TokenBlocklist
-from auth.dependencies import auth, blocklist, is_token_revoked
+from auth.dependencies import auth, is_token_revoked
 from auth.entities.auth_session import TokenRef
+from auth.redis_blocklist import (
+    JTI_KEY_PREFIX,
+    READY_KEY,
+    SEEDING_KEY,
+    RedisTokenBlocklist,
+    redis_blocklist,
+)
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from core.factories.user_factory import make_email
 from core.redis import redis
@@ -56,7 +62,7 @@ def session_opens(monkeypatch):
 async def test_revoke_stores_the_jti_with_the_token_lifetime() -> None:
     ref = _ref(minutes=15)
 
-    await blocklist.revoke([ref])
+    await redis_blocklist.revoke([ref])
 
     ttl_ms = await redis.pttl(JTI_KEY_PREFIX + ref.jti)
     assert 14 * 60 * 1000 < ttl_ms <= 15 * 60 * 1000
@@ -65,20 +71,20 @@ async def test_revoke_stores_the_jti_with_the_token_lifetime() -> None:
 async def test_revoke_skips_a_token_that_already_expired() -> None:
     ref = _ref(minutes=-1)
 
-    await blocklist.revoke([ref])
+    await redis_blocklist.revoke([ref])
 
     assert await redis.exists(JTI_KEY_PREFIX + ref.jti) == 0
 
 
 async def test_lookup_distinguishes_revoked_clean_and_unknown() -> None:
     ref = _ref()
-    await blocklist.revoke([ref])
+    await redis_blocklist.revoke([ref])
 
-    assert await blocklist.lookup(ref.jti) is True
-    assert await blocklist.lookup(uuid.uuid4().hex) is False
+    assert await redis_blocklist.lookup(ref.jti) is True
+    assert await redis_blocklist.lookup(uuid.uuid4().hex) is False
 
     await redis.delete(READY_KEY)
-    assert await blocklist.lookup(ref.jti) is None
+    assert await redis_blocklist.lookup(ref.jti) is None
 
 
 async def test_lookup_returns_none_when_redis_is_down(monkeypatch) -> None:
@@ -87,7 +93,7 @@ async def test_lookup_returns_none_when_redis_is_down(monkeypatch) -> None:
 
     monkeypatch.setattr(redis, "mget", _down)
 
-    assert await blocklist.lookup(uuid.uuid4().hex) is None
+    assert await redis_blocklist.lookup(uuid.uuid4().hex) is None
 
 
 async def test_clean_token_check_opens_no_database_session(db, session_opens) -> None:
@@ -99,7 +105,7 @@ async def test_clean_token_check_opens_no_database_session(db, session_opens) ->
 
 async def test_revoked_token_check_opens_no_database_session(db, session_opens) -> None:
     token = _token(uuid.uuid4())
-    await blocklist.revoke([_ref_of(token)])
+    await redis_blocklist.revoke([_ref_of(token)])
 
     assert await is_token_revoked(token) is True
     assert session_opens["count"] == 0
@@ -145,15 +151,31 @@ async def test_missing_ready_key_falls_back_to_the_database_and_reseeds(db) -> N
 
 
 async def test_only_one_caller_wins_the_seeding_lock() -> None:
-    first = await blocklist.claim_seeding()
-    second = await blocklist.claim_seeding()
+    first = await redis_blocklist.claim_seeding()
+    second = await redis_blocklist.claim_seeding()
 
     assert (first, second) == (True, False)
     assert await redis.exists(SEEDING_KEY) == 1
 
 
+async def test_reseed_loads_only_when_it_wins_the_lock() -> None:
+    ref = _ref()
+    loads = {"count": 0}
+
+    async def _load() -> list[TokenRef]:
+        loads["count"] += 1
+        return [ref]
+
+    await redis.delete(READY_KEY)
+    await redis_blocklist.reseed(_load)
+    await redis_blocklist.reseed(_load)
+
+    assert loads["count"] == 1
+    assert await redis_blocklist.lookup(ref.jti) is True
+
+
 async def test_revoke_failure_propagates(monkeypatch) -> None:
-    broken = TokenBlocklist(redis)
+    broken = RedisTokenBlocklist(redis)
 
     async def _down(*args, **kwargs):
         raise RedisConnectionError("down")

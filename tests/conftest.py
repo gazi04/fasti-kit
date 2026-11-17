@@ -5,7 +5,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import auth.dependencies as auth_dependencies
-from auth.blocklist import READY_KEY
+from auth.redis_blocklist import READY_KEY
 from core.database import (
     AsyncResilientRoutingSession,
     Base,

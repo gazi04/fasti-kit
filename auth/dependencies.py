@@ -9,13 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.blocklist import TokenBlocklist
 from auth.entities.auth_session import AuthSession, TokenRef
+from auth.redis_blocklist import redis_blocklist
 from auth.repositories.account_repository import AccountRepository
 from auth.repositories.refresh_session_repository import RefreshSessionRepository
 from auth.repositories.revoked_token_repository import RevokedTokenRepository
 from auth.services.auth_service import AuthService
 from core.database import AsyncSessionLocal, get_db
 from core.exception import UnauthorizedActionError
-from core.redis import redis
 from core.setting import get_settings
 from user.repositories.user_repository import UserRepository
 
@@ -32,7 +32,7 @@ config = AuthXConfig(
 )
 
 auth = AuthX(config=config)
-blocklist = TokenBlocklist(redis)
+blocklist: TokenBlocklist = redis_blocklist
 
 
 async def is_token_revoked(token: str, **kwargs: Any) -> bool:
@@ -52,8 +52,7 @@ async def is_token_revoked(token: str, **kwargs: Any) -> bool:
     async with AsyncSessionLocal() as db:
         repo = RevokedTokenRepository(db)
         revoked = await repo.exists(payload.jti)
-        if await blocklist.claim_seeding():
-            await blocklist.seed(await repo.list_active())
+        await blocklist.reseed(repo.list_active)
 
     return revoked
 

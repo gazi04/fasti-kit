@@ -5,7 +5,11 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import after_commit
+
+# % if outbox
 from core.outbox.repository import OutboxRepository
+
+# % endif
 from core.queue import enqueue_task
 
 
@@ -24,7 +28,10 @@ class EnqueueAfterCommit:
         after_commit(self.db, _enqueue)
 
 
-_factory: Callable[[AsyncSession], TaskStager] = OutboxRepository
+_factory: Callable[[AsyncSession], TaskStager] = EnqueueAfterCommit
+# % if outbox
+_factory = OutboxRepository
+# % endif
 
 
 def task_stager(db: AsyncSession) -> TaskStager:

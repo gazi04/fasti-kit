@@ -17,7 +17,11 @@ from auth.services.password_hasher import close_password_hasher
 # % endif
 from core.api_versions import v1_router
 from core.database import dispose_engines
+
+# % if outbox
 from core.dead_letter.router import dlq_router
+
+# % endif
 from core.health import health_router
 from core.limiter import limiter
 from core.logging.setup import setup_logging
@@ -109,7 +113,9 @@ setup_openapi(app)
 add_pagination(app)
 
 app.include_router(health_router)
+# % if outbox
 app.include_router(dlq_router)
+# % endif
 app.include_router(v1_router)
 
 Instrumentator().instrument(app).expose(app)

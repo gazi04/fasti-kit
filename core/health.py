@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 
 from core.database import primary_engine, replica_engine
+
+# % if outbox
 from core.outbox.health import outbox_checks
+
+# % endif
 from core.queue import redis, task_queue
 
 logger = logging.getLogger(__name__)
@@ -40,7 +44,10 @@ async def _no_extra_checks() -> dict[str, Awaitable[None]]:
     return {}
 
 
+worker_checks = _no_extra_checks
+# % if outbox
 worker_checks = outbox_checks
+# % endif
 
 
 async def _run_checks(

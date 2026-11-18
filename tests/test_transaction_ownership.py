@@ -19,7 +19,11 @@ from auth.services.email_verification_service import EmailVerificationService
 from core.database import transaction
 from core.exception import ConflictError
 from core.factories.user_factory import make_email
+
+# % if outbox
 from core.outbox.repository import OutboxRepository
+
+# % endif
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import CreateUserRequest
 from user.services.user_service import UserService
@@ -147,6 +151,7 @@ async def test_user_purge_is_one_commit(db, counts) -> None:
     assert await UserRepository(db).count() == 0
 
 
+# % if outbox
 async def test_outbox_dispatch_is_one_commit_and_keeps_send_failures(
     db, counts
 ) -> None:
@@ -192,3 +197,6 @@ async def test_outbox_purge_is_one_commit(db, counts) -> None:
     await OutboxRepository(db).purge_dispatched(datetime.now(UTC))
 
     assert counts == {"commit": 1, "rollback": 0}
+
+
+# % endif

@@ -16,7 +16,7 @@ async def enqueue_task(task_name: str, *, key: str, **kwargs: Any) -> Job | None
     SAQ jobs default to ``retries=1``, which — because ``attempts`` reaches 1 on
     the first run — means a job never actually retries. Route every enqueue
     through here so a transient failure is retried with backoff before the job
-    is dead-lettered.
+    fails for good.
     """
     return await task_queue.enqueue(
         task_name,

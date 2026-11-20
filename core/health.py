@@ -4,8 +4,9 @@ from collections.abc import Awaitable, Mapping
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from core.database import primary_engine, replica_engine
+from core.database import engines
 
 # % if outbox
 from core.outbox.health import outbox_checks
@@ -20,13 +21,8 @@ health_router = APIRouter(prefix="/health", tags=["Health"])
 CHECK_TIMEOUT = 2.0
 
 
-async def _check_primary_database() -> None:
-    async with primary_engine.connect() as conn:
-        await conn.execute(text("SELECT 1"))
-
-
-async def _check_replica_database() -> None:
-    async with replica_engine.connect() as conn:
+async def _check_database(engine: AsyncEngine) -> None:
+    async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
 
 
@@ -85,11 +81,13 @@ async def liveness() -> dict[str, str]:
 
 @health_router.get("/ready")
 async def readiness(response: Response) -> dict:
-    """Validates connectivity to Primary PostgreSQL, Replica PostgreSQL, and Redis."""
+    """Validates connectivity to every database engine and to Redis."""
     return await _run_checks(
         {
-            "database_primary": _check_primary_database(),
-            "database_replica": _check_replica_database(),
+            **{
+                f"database_{name}": _check_database(engine)
+                for name, engine in engines.items()
+            },
             "redis": _check_redis(),
         },
         response,

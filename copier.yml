@@ -29,6 +29,8 @@ _exclude:
   - "<% if not outbox %>core/dead_letter<% endif %>"
   - "<% if not outbox %>tests/test_outbox*.py<% endif %>"
   - "<% if not outbox %>tests/test_dead_letter.py<% endif %>"
+  - "<% if not read_replica %>core/replica<% endif %>"
+  - "<% if not read_replica %>tests/test_replica*.py<% endif %>"
 
 _tasks:
   - uv run --frozen ruff check --fix --select I --quiet .
@@ -56,3 +58,11 @@ outbox:
     outbox table in the same transaction as the business write, a relay in the worker
     enqueues them, and jobs that exhaust their retries land in a dead-letter table with
     an admin API. Without it, jobs are enqueued right after the write commits.
+
+read_replica:
+  type: bool
+  default: false
+  help: >-
+    Route plain reads to a Postgres read replica (DATABASE_REPLICA_URL), keep a request
+    on the primary once it writes, and fail reads over to the primary when the replica
+    is down. Adds the postgres-replica container. Without it, everything uses one engine.

@@ -28,9 +28,12 @@ class <Domain>Repository:
 
 ## Replica/primary routing
 
-`core/database.py`'s `AsyncResilientRoutingSession` auto-routes plain `SELECT`s to the replica and `INSERT`/`UPDATE`/`DELETE` to primary, and once any write happens in a request it "stickies" everything after it to primary. You usually don't need to think about this — but call `force_primary_var.set(True)` (import from `core.database`) explicitly at the top of a method when:
-- The method is about to write (not strictly required — the session detects `Insert`/`Update`/`Delete` automatically — but every existing write method sets it explicitly anyway as a documented signal of intent; match that convention).
-- The method reads something that must reflect a write from earlier in the *same* request, before that write's statement has actually run yet (rare inside a single repository method; more common at the route layer — see `add-route` skill's step 6).
+With the `read_replica` add-on (`core/replica/routing.py`), plain `SELECT`s go to the replica, writes go to the primary, and once a session writes, every later read in it stays on the primary. Repositories never pin by hand:
+- Put every write, and the read it depends on (e.g. the `db.get` before an update), inside `async with transaction(self.db):`. `transaction()` runs its body on the primary.
+- A read that must see the latest committed row without a transaction (e.g. `RevokedTokenRepository.exists`) goes in `with use_primary(self.db):`, imported from `core.database`.
+- A consistent lookup that should also hand its connection back takes `consistent=True` and runs in its own `transaction()` (see `UserRepository._find`).
+
+Without the add-on, both helpers still work: `use_primary` is a no-op and there is one engine.
 
 ## Error translation
 

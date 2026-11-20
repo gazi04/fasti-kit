@@ -34,6 +34,14 @@ def pytest_load_initial_conftests() -> None:
 
     dev = get_settings()
     os.environ["DATABASE_URL"] = _test_database_url(dev.database_url)
-    os.environ["DATABASE_REPLICA_URL"] = _test_database_url(dev.get_replica_url)
     os.environ["REDIS_DB"] = str(_test_redis_db(dev.redis_db))
     get_settings.cache_clear()
+    # % if read_replica
+
+    from core.replica.settings import get_replica_settings
+
+    replica_url = get_replica_settings().database_replica_url
+    if replica_url:
+        os.environ["DATABASE_REPLICA_URL"] = _test_database_url(replica_url)
+    get_replica_settings.cache_clear()
+    # % endif

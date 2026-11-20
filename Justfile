@@ -48,7 +48,7 @@ load_password := "load-test-password"
 
 # k6 against N app replicas behind Caddy; see docs/load-testing.md
 loadtest replicas="3" vus="50" duration="3m" users="100":
-  {{compose_load}} --profile app up -d --build --wait --scale app={{replicas}} postgres-primary postgres-replica redis mailpit caddy prometheus app worker
+  {{compose_load}} --profile app up -d --build --wait --scale app={{replicas}} postgres-primary redis mailpit caddy prometheus app worker
   {{compose_load}} restart caddy prometheus
   {{compose_load}} run --rm --no-deps app seed --count {{users}} --password {{load_password}} --email-prefix load --force
   mkdir -p loadtest/results && chmod a+w loadtest/results

@@ -1,6 +1,7 @@
 from sqlalchemy import select
 
-from core.database import AsyncSessionLocal, bind_override_var
+from core.database import AsyncSessionLocal
+from core.engine import bind_override_var
 from user.models.user_model import UserModel
 
 

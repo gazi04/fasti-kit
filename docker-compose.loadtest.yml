@@ -12,13 +12,17 @@ services:
     # Caddy reaches them by DNS at load.fasti.localhost.
     container_name: !reset null
     ports: !reset []
+# % if read_replica
     depends_on:
       postgres-replica:
         condition: service_healthy
+# % endif
     environment:
       # A deployed-like app: no N+1 detector, JSON logs.
       ENVIRONMENT: staging
+# % if read_replica
       DATABASE_REPLICA_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-replica:5432/${DB_NAME}
+# % endif
       # Caddy, then k6. k6 sends a fake client IP per virtual user, so each one gets
       # its own rate-limit bucket while the limiter stays on.
       FORWARDED_ALLOW_IPS: 172.28.0.10,172.28.0.20
@@ -32,16 +36,20 @@ services:
   worker:
     environment:
       ENVIRONMENT: staging
+# % if read_replica
       DATABASE_REPLICA_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-replica:5432/${DB_NAME}
+# % endif
 
   redis:
     # Containers reach Redis by name; publishing 6379 would clash with a host Redis.
     ports: !reset []
 
   # Opt-in profiles in the base file; always part of the load-test stack.
+# % if read_replica
   postgres-replica:
     profiles: !reset []
 
+# % endif
   caddy:
     profiles: !reset []
 

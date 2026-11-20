@@ -7,7 +7,7 @@ from sqlalchemy import ColumnElement, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from core.database import force_primary_var, transaction
+from core.database import transaction
 from core.deferred_tasks import task_stager
 from core.exception import ConflictError
 from user.entities.user import User
@@ -56,18 +56,14 @@ class UserRepository:
         self, condition: ColumnElement[bool], *, consistent: bool
     ) -> User | None:
         if consistent:
-            return await self._find_on_primary_and_release(condition)
+            async with transaction(self.db):
+                return await self._select_one(condition)
 
+        return await self._select_one(condition)
+
+    async def _select_one(self, condition: ColumnElement[bool]) -> User | None:
         model = await self.db.scalar(select(UserModel).where(condition))
         return None if model is None else self._to_entity(model)
-
-    async def _find_on_primary_and_release(
-        self, condition: ColumnElement[bool]
-    ) -> User | None:
-        force_primary_var.set(True)
-        async with transaction(self.db):
-            model = await self.db.scalar(select(UserModel).where(condition))
-            return None if model is None else self._to_entity(model)
 
     async def update(self, id: UUID, **fields) -> User | None:
         async with transaction(self.db):
@@ -78,24 +74,20 @@ class UserRepository:
             return await self.stage_deactivate(id)
 
     async def force_delete(self, id: UUID) -> User | None:
-        force_primary_var.set(True)
-        user = await self.db.get(UserModel, id)
-
-        if user is None:
-            return
-        result = self._to_entity(user)
-
         async with transaction(self.db):
+            user = await self.db.get(UserModel, id)
+
+            if user is None:
+                return None
+
             await self.db.delete(user)
             await self.db.flush()
-
-        return result
+            return self._to_entity(user)
 
     async def count(self) -> int:
         return await self.db.scalar(select(func.count()).select_from(UserModel)) or 0
 
     async def purge_all(self) -> int:
-        force_primary_var.set(True)
         async with transaction(self.db):
             result = await self.db.execute(delete(UserModel).returning(UserModel.id))
             return len(result.scalars().all())
@@ -119,7 +111,6 @@ class UserRepository:
         id: UUID | None = None,
         pending_verification_jti: str | None = None,
     ) -> User:
-        force_primary_var.set(True)
         model = UserModel(
             id=id or uuid4(),
             full_name=full_name,
@@ -133,7 +124,6 @@ class UserRepository:
         return self._to_entity(model)
 
     async def stage_update(self, id: UUID, **fields) -> User | None:
-        force_primary_var.set(True)
         user = await self.db.get(UserModel, id)
 
         if user is None:

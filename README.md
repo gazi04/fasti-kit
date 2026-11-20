@@ -3,7 +3,7 @@
 A FastAPI starter kit built around a scaffolding CLI that generates DDD-style domain
 folders — routes, schemas, entities, models, repositories, services — so a new domain
 follows the same shape every time, and plugs into production-shaped infrastructure that's
-already there: RFC 7807 error responses, primary/replica DB routing, rate limiting,
+already there: RFC 7807 error responses, optional primary/replica DB routing, rate limiting,
 response caching, background jobs with a transactional outbox, cursor pagination, path
 versioning, and import-linter-enforced layering.
 
@@ -61,10 +61,10 @@ stays coherent as it grows past the two example domains (`auth`, `user`) it ship
 - **RFC 7807 problem details** — every error path (validation errors, rate-limit 429s,
   domain exceptions, unhandled 500s) is normalized into a single `application/problem+json`
   shape with a correlation ID, via `core/problem.py`.
-- **Primary/replica DB routing** — reads go to a replica, writes go to primary, and a
-  request that writes "stickies" to primary for the rest of its lifetime so it never
-  reads its own write from a lagging replica. Replica failures fail over to primary
-  automatically.
+- **Primary/replica DB routing** (`read_replica` add-on) — reads go to a replica, writes
+  go to primary, and a request that writes "stickies" to primary for the rest of its
+  lifetime so it never reads its own write from a lagging replica. Replica failures fail
+  over to primary automatically.
 - **N+1 query detection** — a local-only middleware counts SQL statements per request,
   exposes the count via an `X-Query-Count` header, and logs a warning past a threshold.
 - **Rate limiting** — Redis-backed, applied per-route with a decorator
@@ -108,7 +108,8 @@ fasti-kit/
 │   ├── routes/             # APIRouter instances
 │   └── dependencies.py    # Depends() factories (get_user_service, get_current_user, ...)
 ├── core/                 # cross-cutting infrastructure, shared by every domain
-│   ├── database.py         # AsyncResilientRoutingSession — primary/replica routing
+│   ├── database.py         # sessions, transaction(), use_primary(), the engines
+│   ├── replica/            # primary/replica routing (read_replica add-on)
 │   ├── problem.py           # RFC 7807 error formatting
 │   ├── exception.py         # DomainException and subclasses
 │   ├── cache.py              # Redis cache-aside decorator
@@ -154,14 +155,16 @@ and failing on the first request.
 
 ### Database: primary/replica routing
 
-`core/database.py`'s `AsyncResilientRoutingSession` inspects each statement: `SELECT`s
-go to the replica engine, writes go to primary. Once a request performs any write, the
-session "stickies" to primary for the rest of that request (via a contextvar) so a
-later read in the same request can't see stale replica data. If a route needs
-read-after-write consistency *before* an actual write runs — e.g. reading a row it's
-about to check, ahead of updating it — it can force primary explicitly rather than
-relying on the sticky flag. Replica `OperationalError`s fail reads over to primary
-automatically.
+Repositories own the database work. `transaction(db)` in `core/database.py` wraps every
+write, and `use_primary(db)` wraps a read that must see the latest committed row. Without
+add-ons there is one engine, and `use_primary` does nothing.
+
+With the `read_replica` add-on, `core/replica/routing.py` sends plain `SELECT`s to the replica
+engine and everything else to primary, and both helpers keep their reads on the primary.
+Once a session writes, it "stickies" to primary for the rest of that request, so a later
+read can't see stale replica data. Replica connection errors fail reads over to primary
+automatically. Leave `DATABASE_REPLICA_URL` unset and the add-on uses the primary engine
+for everything.
 
 ### Errors
 
@@ -228,8 +231,9 @@ a normal diff, so review it with `git diff` before committing.
 |---|---|---|
 | bcrypt pool | `bcrypt_pool` | A bounded thread pool for password hashing. Past the limit, logins get a 503 with `Retry-After` instead of queueing. Without it, hashing uses `asyncio.to_thread`. |
 | Redis token blocklist | `redis_blocklist` | Caches revoked token ids in Redis, so an authenticated request checks Redis instead of the database. Without it, every request reads the `revoked_tokens` table, which stays the source of truth either way. |
+| Read replica | `read_replica` | Sends plain reads to a Postgres replica (`DATABASE_REPLICA_URL`), keeps a request on the primary once it writes, fails reads over to the primary when the replica is down, and adds the `postgres-replica` container. Without it, everything uses one engine. |
 
-More add-ons are planned: the dead-letter queue, the outbox and the read replica.
+More add-ons are planned: the dead-letter queue and the outbox.
 
 ## Getting started
 
@@ -263,7 +267,7 @@ of the stack is optional and sits behind Compose profiles:
 
 | Profile | Services |
 |---|---|
-| `replica` | `postgres-replica` (host port 5434) |
+| `replica` | `postgres-replica` (host port 5434, `read_replica` add-on) |
 | `tools` | `pgadmin` |
 | `observability` | `prometheus`, `grafana`, `dozzle` |
 | `gateway` | `caddy` |
@@ -275,8 +279,8 @@ docker compose --profile full up -d            # everything, or: just docker-ful
 COMPOSE_PROFILES=gateway just dev              # just dev starts only the base otherwise
 ```
 
-Without the replica, reads go to the primary: leave `DATABASE_REPLICA_URL` unset. To use the
-replica, start the `replica` profile and set
+With the `read_replica` add-on, reads go to the primary until you set `DATABASE_REPLICA_URL`.
+To use the replica, start the `replica` profile and set
 `DATABASE_REPLICA_URL=postgresql+asyncpg://…@localhost:5434/<db>` in `.env`.
 
 | Service | URL |
@@ -301,8 +305,8 @@ docker-compose --profile app up -d --build   # or: just docker-app
 
 This builds and runs the app plus the SAQ worker as containers (`fasti-app`, `fasti-worker`),
 pointed at the same `postgres-primary`/`redis`/`mailpit` services over the Compose network,
-and runs `alembic upgrade head` on boot. Both containers read from the primary only
-(`DATABASE_REPLICA_URL` is set to empty); the load-test overlay points them at the replica. To have the `caddy` gateway route
+and runs `alembic upgrade head` on boot. Both containers read from the primary only; with
+the `read_replica` add-on, the load-test overlay points them at the replica. To have the `caddy` gateway route
 `api.fasti.localhost` to the dockerized app instead of the host process, set
 `API_UPSTREAM=app:8000` in `.env` and restart `caddy`.
 

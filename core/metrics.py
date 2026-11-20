@@ -8,7 +8,7 @@ from sqlalchemy import Engine, event
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.pool import QueuePool
 
-from core.database import primary_engine, replica_engine
+from core.database import engines
 from core.setting import get_settings
 
 HOLD_START_KEY = "metrics_hold_start"
@@ -61,7 +61,6 @@ def install_pool_metrics(registry: CollectorRegistry = REGISTRY) -> None:
     _installed_registries.add(id(registry))
 
     settings = get_settings()
-    engines = {"primary": primary_engine, "replica": replica_engine}
     registry.register(
         PoolCollector(engines, settings.db_pool_size + settings.db_max_overflow)
     )

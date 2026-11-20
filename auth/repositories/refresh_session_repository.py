@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entities.refresh_session import RefreshSession
 from auth.models.refresh_session_model import RefreshSessionModel
-from core.database import force_primary_var, transaction
+from core.database import transaction, use_primary
 
 
 class RefreshSessionRepository:
@@ -14,7 +14,6 @@ class RefreshSessionRepository:
         self.db: AsyncSession = db
 
     async def create(self, user_id: UUID, expires_at: datetime) -> RefreshSession:
-        force_primary_var.set(True)
         model = RefreshSessionModel(user_id=user_id, expires_at=expires_at)
 
         async with transaction(self.db):
@@ -25,7 +24,6 @@ class RefreshSessionRepository:
     async def rotate(
         self, session_id: UUID, user_id: UUID, generation: int
     ) -> RefreshSession | None:
-        force_primary_var.set(True)
         now = datetime.now(UTC)
         claim = (
             update(RefreshSessionModel)
@@ -45,13 +43,10 @@ class RefreshSessionRepository:
             return None if model is None else self._to_entity(model)
 
     async def get(self, session_id: UUID) -> RefreshSession | None:
-        token = force_primary_var.set(True)
-        try:
+        with use_primary(self.db):
             model = await self.db.get(
                 RefreshSessionModel, session_id, populate_existing=True
             )
-        finally:
-            force_primary_var.reset(token)
 
         return None if model is None else self._to_entity(model)
 
@@ -69,7 +64,6 @@ class RefreshSessionRepository:
         await self._revoke_where(RefreshSessionModel.user_id == user_id)
 
     async def purge_expired(self) -> int:
-        force_primary_var.set(True)
         async with transaction(self.db):
             result = await self.db.execute(
                 delete(RefreshSessionModel)
@@ -79,7 +73,6 @@ class RefreshSessionRepository:
             return len(result.scalars().all())
 
     async def _revoke_where(self, *conditions) -> None:
-        force_primary_var.set(True)
         await self.db.execute(
             update(RefreshSessionModel)
             .where(*conditions, RefreshSessionModel.revoked_at.is_(None))

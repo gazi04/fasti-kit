@@ -63,7 +63,7 @@ async def create_user(request: Request, ...):
 
 ## 6. Read-after-write consistency
 
-Routes never touch `force_primary_var`, and can't: import-linter forbids routes and services from importing `core.database`. If a read must see the latest write (e.g. checking a user row before issuing a token), the repository method takes `consistent=True` and pins the read to primary itself. See `UserRepository.get` / `get_by_email`, as called by `AuthService.refresh` and `SecurityService.authenticate`. Plain reads (`GET /users/me`, `GET /users`) are fine going to the replica.
+Routes never choose a database, and can't: import-linter forbids routes and services from importing `core.database`. If a read must see the latest write (e.g. checking a user row before issuing a token), the repository method takes `consistent=True` and runs the read in its own `transaction()`, which reads from the primary with the `read_replica` add-on. See `UserRepository.get` / `get_by_email`, as called by `AuthService.refresh` and `SecurityService.authenticate`. Plain reads (`GET /users/me`, `GET /users`) are fine going to the replica.
 
 ## 7. Verify
 

@@ -52,7 +52,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import force_primary_var, transaction
+from core.database import transaction
 from core.exception import ConflictError
 from {domain}.entities.{snake} import {pascal}
 from {domain}.models import {pascal}Model
@@ -63,7 +63,6 @@ class {pascal}Repository:
         self.db: AsyncSession = db
 
     async def add({add_signature}) -> {pascal}:
-        force_primary_var.set(True)
         model = {model_instantiation}
 
         async with transaction(self.db):
@@ -79,43 +78,38 @@ class {pascal}Repository:
         return self._to_entity(result)
 
     async def update(self, id: UUID, **fields) -> {pascal} | None:
-        force_primary_var.set(True)
-        record = await self.db.get({pascal}Model, id)
-
-        if record is None:
-            return None
-
         async with transaction(self.db):
+            record = await self.db.get({pascal}Model, id)
+
+            if record is None:
+                return None
+
             for key, value in fields.items():
                 setattr(record, key, value)
             await self._flush_or_raise()
             return self._to_entity(record)
 
     async def delete(self, id: UUID) -> {pascal} | None:
-        force_primary_var.set(True)
-        record = await self.db.get({pascal}Model, id)
-
-        if record is None:
-            return None
-
         async with transaction(self.db):
+            record = await self.db.get({pascal}Model, id)
+
+            if record is None:
+                return None
+
             record.is_active = False
             await self.db.flush()
             return self._to_entity(record)
 
     async def force_delete(self, id: UUID) -> {pascal} | None:
-        force_primary_var.set(True)
-        record = await self.db.get({pascal}Model, id)
-
-        if record is None:
-            return None
-        result = self._to_entity(record)
-
         async with transaction(self.db):
+            record = await self.db.get({pascal}Model, id)
+
+            if record is None:
+                return None
+
             await self.db.delete(record)
             await self.db.flush()
-
-        return result
+            return self._to_entity(record)
 
     async def list(self, params: CursorParams | None = None) -> CursorPage[{pascal}]:
         return await apaginate(

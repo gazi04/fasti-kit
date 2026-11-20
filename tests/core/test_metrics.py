@@ -60,6 +60,6 @@ def test_install_twice_on_one_registry_is_a_no_op() -> None:
     install_pool_metrics(registry)
 
     assert (
-        registry.get_sample_value("db_pool_capacity", {"engine": "replica"})
+        registry.get_sample_value("db_pool_capacity", {"engine": "primary"})
         == settings.db_pool_size + settings.db_max_overflow
     )

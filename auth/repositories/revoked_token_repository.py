@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.entities.auth_session import TokenRef
 from auth.entities.revoked_token import RevokedToken
 from auth.models.revoked_token_model import RevokedTokenModel
-from core.database import force_primary_var, transaction
+from core.database import transaction, use_primary
 from core.exception import ConflictError
 
 
@@ -21,34 +21,27 @@ class RevokedTokenRepository:
             return await self.stage_add(jti, expires_at)
 
     async def exists(self, jti: str) -> bool:
-        token = force_primary_var.set(True)
-        try:
+        with use_primary(self.db):
             result = await self.db.scalar(
                 select(RevokedTokenModel).where(
                     RevokedTokenModel.jti == jti,
                     RevokedTokenModel.expires_at > datetime.now(UTC),
                 )
             )
-        finally:
-            force_primary_var.reset(token)
 
         return result is not None
 
     async def list_active(self) -> list[TokenRef]:
-        token = force_primary_var.set(True)
-        try:
+        with use_primary(self.db):
             rows = await self.db.execute(
                 select(RevokedTokenModel.jti, RevokedTokenModel.expires_at).where(
                     RevokedTokenModel.expires_at > datetime.now(UTC)
                 )
             )
-        finally:
-            force_primary_var.reset(token)
 
         return [TokenRef(jti, expires_at) for jti, expires_at in rows.all()]
 
     async def purge_expired(self) -> int:
-        force_primary_var.set(True)
         async with transaction(self.db):
             result = await self.db.execute(
                 delete(RevokedTokenModel)
@@ -58,7 +51,6 @@ class RevokedTokenRepository:
             return len(result.scalars().all())
 
     async def stage_add(self, jti: str, expires_at: datetime) -> RevokedToken:
-        force_primary_var.set(True)
         model = RevokedTokenModel(jti=jti, expires_at=expires_at)
 
         try:
@@ -70,7 +62,6 @@ class RevokedTokenRepository:
         return self._to_entity(model)
 
     async def stage_add_if_absent(self, jti: str, expires_at: datetime) -> None:
-        force_primary_var.set(True)
         await self.db.execute(
             insert(RevokedTokenModel)
             .values(jti=jti, expires_at=expires_at)

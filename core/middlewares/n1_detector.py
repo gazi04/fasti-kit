@@ -6,7 +6,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from core.database import primary_engine, replica_engine
+from core.database import engines
 from core.problem import problem_response
 
 logger = logging.getLogger(__name__)
@@ -30,16 +30,12 @@ class N1DetectorMiddleware:
         self.threshold = threshold
 
         if not N1DetectorMiddleware._listeners_attached:
-            event.listen(
-                primary_engine.sync_engine,
-                "before_cursor_execute",
-                _increment_query_count,
-            )
-            event.listen(
-                replica_engine.sync_engine,
-                "before_cursor_execute",
-                _increment_query_count,
-            )
+            for engine in engines.values():
+                event.listen(
+                    engine.sync_engine,
+                    "before_cursor_execute",
+                    _increment_query_count,
+                )
             N1DetectorMiddleware._listeners_attached = True
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

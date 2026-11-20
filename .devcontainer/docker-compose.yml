@@ -6,7 +6,9 @@ services:
     command: sleep infinity
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_NAME}
+# % if read_replica
       DATABASE_REPLICA_URL: ""
+# % endif
       REDIS_HOST: redis
       MAIL_SERVER: mailpit
     volumes:

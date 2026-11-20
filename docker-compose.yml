@@ -10,9 +10,11 @@ services:
     image: bitnami/postgresql:latest
     container_name: fasti-postgres-primary
     environment:
+# % if read_replica
       POSTGRESQL_REPLICATION_MODE: master
       POSTGRESQL_REPLICATION_USER: repl_user
       POSTGRESQL_REPLICATION_PASSWORD: repl_password
+# % endif
       POSTGRESQL_USERNAME: ${DB_USER}
       POSTGRESQL_PASSWORD: ${DB_PASSWORD}
       POSTGRESQL_DATABASE: ${DB_NAME}
@@ -26,6 +28,7 @@ services:
       timeout: 5s
       retries: 5
 
+# % if read_replica
   postgres-replica:
     logging: *default-logging
     profiles: ["replica", "full"]
@@ -50,6 +53,7 @@ services:
       timeout: 5s
       retries: 5
 
+# % endif
   pgadmin:
     logging: *default-logging
     profiles: ["tools", "full"]
@@ -171,7 +175,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_NAME}
+# % if read_replica
       DATABASE_REPLICA_URL: ""
+# % endif
       REDIS_HOST: redis
       MAIL_SERVER: mailpit
       RUN_MIGRATIONS: "true"
@@ -195,7 +201,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_NAME}
+# % if read_replica
       DATABASE_REPLICA_URL: ""
+# % endif
       REDIS_HOST: redis
       MAIL_SERVER: mailpit
     command: ["saq", "core.worker.main.settings"]
@@ -218,7 +226,9 @@ networks:
 
 volumes:
   postgres_primary_data:
+# % if read_replica
   postgres_replica_data:
+# % endif
   pgadmin_data:
   mailpit_data:
   caddy_data:

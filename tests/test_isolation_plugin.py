@@ -3,7 +3,7 @@ import secrets
 import pytest
 from sqlalchemy.engine import URL, make_url
 
-from core.database import primary_engine, replica_engine
+from core.database import engines
 from core.redis import redis
 from core.setting import get_settings
 from tests.isolation_plugin import _test_database_url, _test_redis_db
@@ -45,8 +45,8 @@ def test_refuses_a_test_redis_db_equal_to_the_dev_one(monkeypatch) -> None:
 
 
 def test_the_app_under_test_points_at_the_test_database() -> None:
-    assert (primary_engine.url.database or "").endswith("_test")
-    assert (replica_engine.url.database or "").endswith("_test")
+    for engine in engines.values():
+        assert (engine.url.database or "").endswith("_test")
 
 
 def test_the_app_under_test_uses_the_test_redis_db() -> None:

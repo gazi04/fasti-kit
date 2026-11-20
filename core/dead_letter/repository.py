@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -7,7 +8,7 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import force_primary_var, transaction
+from core.database import transaction, use_primary
 from core.dead_letter.entity import DeadLetterJob
 from core.dead_letter.model import DeadLetterJobModel
 from core.outbox.repository import OutboxRepository
@@ -29,7 +30,6 @@ class DeadLetterJobRepository:
         error: str | None,
         attempts: int,
     ) -> DeadLetterJob:
-        force_primary_var.set(True)
         model = DeadLetterJobModel(
             job_key=job_key,
             function=function,
@@ -64,10 +64,8 @@ class DeadLetterJobRepository:
     async def get(
         self, job_id: UUID, *, consistent: bool = False
     ) -> DeadLetterJob | None:
-        if consistent:
-            force_primary_var.set(True)
-
-        model = await self.db.get(DeadLetterJobModel, job_id)
+        with use_primary(self.db) if consistent else nullcontext():
+            model = await self.db.get(DeadLetterJobModel, job_id)
 
         if model is None:
             return None
@@ -75,7 +73,6 @@ class DeadLetterJobRepository:
         return self._to_entity(model)
 
     async def retry(self, job_id: UUID) -> DeadLetterJob | None:
-        force_primary_var.set(True)
         claim = (
             update(DeadLetterJobModel)
             .where(
@@ -96,16 +93,14 @@ class DeadLetterJobRepository:
             return self._to_entity(model)
 
     async def delete(self, job_id: UUID) -> bool:
-        force_primary_var.set(True)
-        model = await self.db.get(DeadLetterJobModel, job_id)
-
-        if model is None:
-            return False
-
         async with transaction(self.db):
-            await self.db.delete(model)
+            model = await self.db.get(DeadLetterJobModel, job_id)
 
-        return True
+            if model is None:
+                return False
+
+            await self.db.delete(model)
+            return True
 
     async def purge(
         self,
@@ -113,7 +108,6 @@ class DeadLetterJobRepository:
         before: datetime | None = None,
         only_retried: bool = True,
     ) -> int:
-        force_primary_var.set(True)
         stmt = delete(DeadLetterJobModel).returning(DeadLetterJobModel.id)
 
         if before is not None:

@@ -69,19 +69,10 @@ class Settings(BaseSettings):
     task_retry_delay: float = 5.0
     task_retry_backoff: bool = True
 
-    database_replica_url: str | None = None
-
     @computed_field
     @property
     def is_deployed(self) -> bool:
         return self.environment != "local"
-
-    @computed_field
-    @property
-    def get_replica_url(self) -> str:
-        if self.database_replica_url:
-            return self.database_replica_url
-        return self.database_url
 
     @computed_field
     @property

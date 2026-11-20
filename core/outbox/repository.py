@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import force_primary_var, transaction
+from core.database import transaction, use_primary
 from core.outbox.model import OutboxEvent
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,6 @@ class OutboxRepository:
         self.db: AsyncSession = db
 
     async def stage_add(self, task_name: str, payload: dict[str, Any]) -> OutboxEvent:
-        force_primary_var.set(True)
         event = OutboxEvent(task_name=task_name, payload=payload)
         self.db.add(event)
         await self.db.flush()
@@ -28,7 +27,6 @@ class OutboxRepository:
     async def dispatch_pending(
         self, batch_size: int, *, max_attempts: int, send: Send
     ) -> tuple[int, int]:
-        force_primary_var.set(True)
         dispatched = 0
         failed = 0
 
@@ -57,7 +55,6 @@ class OutboxRepository:
         return dispatched, failed
 
     async def purge_dispatched(self, before: datetime) -> int:
-        force_primary_var.set(True)
         async with transaction(self.db):
             result = await self.db.execute(
                 delete(OutboxEvent)
@@ -70,13 +67,13 @@ class OutboxRepository:
             return len(result.scalars().all())
 
     async def oldest_pending_age(self) -> float | None:
-        force_primary_var.set(True)
-        oldest = await self.db.scalar(
-            select(func.min(OutboxEvent.created_at)).where(
-                OutboxEvent.dispatched_at.is_(None),
-                OutboxEvent.failed_at.is_(None),
+        with use_primary(self.db):
+            oldest = await self.db.scalar(
+                select(func.min(OutboxEvent.created_at)).where(
+                    OutboxEvent.dispatched_at.is_(None),
+                    OutboxEvent.failed_at.is_(None),
+                )
             )
-        )
         if oldest is None:
             return None
         return (datetime.now(UTC) - oldest).total_seconds()

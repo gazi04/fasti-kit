@@ -74,8 +74,7 @@ def test_generate_repository_matches_user_repository_pattern(tmp_path, monkeypat
 
     content = Path("scratch/repositories/widget_repository.py").read_text()
 
-    assert "from core.database import force_primary_var" in content
-    assert content.count("force_primary_var.set(True)") == 4
+    assert "force_primary_var" not in content
     assert "auto_commit" not in content
     assert "async with transaction(self.db):" in content
     assert "_flush_or_raise" in content

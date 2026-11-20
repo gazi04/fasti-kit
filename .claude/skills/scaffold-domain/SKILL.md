@@ -38,7 +38,7 @@ The `uv run create-domain`/`uv run create-all` CLI (see `scripts/`) generates a 
 
 - Routes, resource-style under the plural entity name (e.g. `/products`): `POST /products`, `GET /products/{id}`, `PATCH /products/{id}`, `DELETE /products/{id}`, cursor-paginated `GET /products`. Create/update/delete require an access token via `auth.token_required`; get/list are public. Tighten with `require_scopes(...)` from `auth/dependencies.py` if the domain needs it.
 - Routes get the service from `<domain>/dependencies.py` (`get_<entity>_service`), never by constructing `Service(Repository(db))` inline.
-- Repositories pin `force_primary_var` on writes, take `auto_commit`, and flush through the `_flush_or_raise` savepoint.
+- Repositories wrap each write, and the read it depends on, in `async with transaction(self.db):`, and flush through `_flush_or_raise`.
 
 ## Common follow-ups (do only if asked)
 

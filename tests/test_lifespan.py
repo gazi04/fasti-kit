@@ -4,7 +4,7 @@ from asgi_lifespan import LifespanManager
 from sqlalchemy import text
 
 import main
-from core.database import dispose_engines, primary_engine, replica_engine
+from core.database import dispose_engines, engines
 from core.redis import close_redis, redis
 
 
@@ -14,7 +14,7 @@ async def test_dispose_engines_is_idempotent() -> None:
     await dispose_engines()
     await dispose_engines()
 
-    for engine in (primary_engine, replica_engine):
+    for engine in engines.values():
         async with engine.connect() as conn:
             assert (await conn.execute(text("SELECT 1"))).scalar_one() == 1
 

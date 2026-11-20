@@ -35,6 +35,27 @@ _exclude:
 _tasks:
   - uv run --frozen ruff check --fix --select I --quiet .
   - uv run --frozen ruff format --quiet .
+  - |
+    uv run --frozen python - <<'EOF'
+    from pathlib import Path
+
+    from detect_secrets import SecretsCollection
+    from detect_secrets.core import baseline
+
+    path = ".secrets.baseline"
+    template_baseline = baseline.load_from_file(path)
+    recorded = baseline.load(template_baseline, path)
+    for removed_file in [name for name in recorded.files if not Path(name).exists()]:
+        del recorded.data[removed_file]
+    kept_files = sorted(recorded.files)
+    rescanned = SecretsCollection()
+    for name in kept_files:
+        rescanned.scan_file(name)
+    recorded.trim(scanned_results=rescanned, filelist=kept_files)
+    refreshed = baseline.format_for_output(recorded)
+    refreshed["generated_at"] = template_baseline["generated_at"]
+    baseline.save_to_file(refreshed, path)
+    EOF
 
 bcrypt_pool:
   type: bool

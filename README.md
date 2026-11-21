@@ -4,7 +4,7 @@ A FastAPI starter kit built around a scaffolding CLI that generates DDD-style do
 folders — routes, schemas, entities, models, repositories, services — so a new domain
 follows the same shape every time, and plugs into production-shaped infrastructure that's
 already there: RFC 7807 error responses, optional primary/replica DB routing, rate limiting,
-response caching, background jobs with a transactional outbox, cursor pagination, path
+response caching, background jobs (with an optional transactional outbox), cursor pagination, path
 versioning, and import-linter-enforced layering.
 
 ## Why this exists
@@ -71,13 +71,14 @@ stays coherent as it grows past the two example domains (`auth`, `user`) it ship
   (`@limiter.limit("5/minute")`).
 - **Response caching** — a `@cache(ttl=..., tags=[...])` decorator for Redis
   cache-aside, with tag-based invalidation.
-- **Background jobs + transactional outbox** — jobs run through SAQ/Redis with a real
-  retry policy; anything that needs to happen atomically with a DB write (e.g. "send
-  this email after the signup commits") goes through an outbox table instead of
-  `BackgroundTasks`, so the side effect can't fire before the transaction it depends on
-  actually commits.
-- **Dead-letter queue** — jobs that exhaust their retries land in a `dead_letter_jobs`
-  table, inspectable and retriable through an admin API.
+- **Background jobs** — jobs run through SAQ/Redis with a real retry policy. A job tied
+  to a DB write (e.g. "send this email after the signup commits") is enqueued only after
+  the transaction commits, so the side effect can't fire for a write that never happened.
+- **Transactional outbox** (`outbox` add-on) — writes those jobs to an outbox table in the
+  same transaction instead, so they are delivered at-least-once even if Redis is down at
+  commit time.
+- **Dead-letter queue** (`outbox` add-on) — jobs that exhaust their retries land in a
+  `dead_letter_jobs` table, inspectable and retriable through an admin API.
 - **Cursor pagination** — `fastapi-pagination` + `sqlakeyset`, used consistently across
   list endpoints instead of offset pagination.
 - **Path-based API versioning** — routes are mounted under `/api/v1`, structured so a
@@ -115,8 +116,9 @@ fasti-kit/
 │   ├── cache.py              # Redis cache-aside decorator
 │   ├── limiter.py            # rate limiting
 │   ├── queue.py / worker/   # background jobs (SAQ)
-│   ├── outbox/                # transactional outbox
-│   ├── dead_letter/           # dead-letter queue + admin API
+│   ├── deferred_tasks.py      # hand off a job from a repository, enqueued after commit
+│   ├── outbox/                # transactional outbox (outbox add-on)
+│   ├── dead_letter/           # dead-letter queue + admin API (outbox add-on)
 │   ├── middlewares/           # correlation ID, security headers, N+1 detector
 │   ├── api_versions.py       # mounts each domain's router under /api/v1
 │   ├── models.py               # imports every domain's models (Alembic manifest)
@@ -181,16 +183,18 @@ Jobs run through `core/queue.py`'s `task_queue` (SAQ + Redis), registered in
 retry policy applied automatically — SAQ's own default (`retries=1`) effectively never
 retries, so this matters.
 
-For work that has to happen atomically with a DB write (send a verification email after
-signup, only if the signup actually commits), `core/outbox/`'s `OutboxRepository.add(...)`
-writes a row into the same transaction as the business write instead of enqueueing
-directly. A relay loop polls that table with `FOR UPDATE SKIP LOCKED` and forwards rows
-to the real queue, so the side effect is delivered at-least-once and never fires ahead
-of the write it depends on.
+For work that has to follow a DB write (send a verification email after signup, only if
+the signup actually commits), a repository calls `task_stager(db).stage_add(...)` from
+`core/deferred_tasks.py` inside its transaction. By default the job is enqueued right
+after the commit; if Redis fails at that moment the signup still succeeds and the email
+is lost (the user can ask for it again).
 
-Jobs that exhaust their retries are captured by `core/dead_letter/` and inspectable
-through an admin API (list / inspect / retry / purge), gated behind an `admin:read`
-scope.
+With the `outbox` add-on, the same call writes a row into an outbox table in the same
+transaction instead. A relay loop in the worker polls that table with
+`FOR UPDATE SKIP LOCKED` and forwards rows to the real queue, so the side effect is
+delivered at-least-once. Jobs that exhaust their retries are captured by
+`core/dead_letter/` and inspectable through an admin API (list / inspect / retry /
+purge), gated behind an `admin:read` scope.
 
 ### Caching, rate limiting, pagination
 
@@ -231,9 +235,8 @@ a normal diff, so review it with `git diff` before committing.
 |---|---|---|
 | bcrypt pool | `bcrypt_pool` | A bounded thread pool for password hashing. Past the limit, logins get a 503 with `Retry-After` instead of queueing. Without it, hashing uses `asyncio.to_thread`. |
 | Redis token blocklist | `redis_blocklist` | Caches revoked token ids in Redis, so an authenticated request checks Redis instead of the database. Without it, every request reads the `revoked_tokens` table, which stays the source of truth either way. |
+| Outbox + dead-letter queue | `outbox` | Writes background jobs to an outbox table in the same transaction as the business write, with a relay in the worker, so delivery is at-least-once. Failed jobs land in a dead-letter table with an admin API. Without it, jobs are enqueued right after the commit (at-most-once). |
 | Read replica | `read_replica` | Sends plain reads to a Postgres replica (`DATABASE_REPLICA_URL`), keeps a request on the primary once it writes, fails reads over to the primary when the replica is down, and adds the `postgres-replica` container. Without it, everything uses one engine. |
-
-More add-ons are planned: the dead-letter queue and the outbox.
 
 ## Getting started
 
@@ -427,8 +430,8 @@ All domain routes are mounted under `/api/v1`.
 | PATCH | `/api/v1/users/me` | Update the current user |
 | DELETE | `/api/v1/users/me` | Close the current user's account |
 | GET | `/api/v1/users` | Cursor-paginated user list (`admin:read` scope) |
-| GET | `/api/admin/tasks/dlq` | List dead-letter jobs (`admin:read` scope) |
-| POST | `/api/admin/tasks/dlq/{id}/retry` | Retry a dead-lettered job |
+| GET | `/api/admin/tasks/dlq` | List dead-letter jobs (`admin:read` scope, `outbox` add-on) |
+| POST | `/api/admin/tasks/dlq/{id}/retry` | Retry a dead-lettered job (`outbox` add-on) |
 
 Full, current request/response schemas are in the generated OpenAPI docs at `/docs` once
 the app is running.

@@ -28,7 +28,7 @@ If the endpoint needs a new repository/service method, add it to `<domain>/repos
 
 - Full auth requirement: `payload: TokenPayload = Depends(auth.token_required(type="access", locations=["headers"]))`, then `UUID(payload.sub)` for the user id — see `PATCH /users/me`, `DELETE /users/me`, `GET /users` in `user_router.py`.
 - Need the full user entity, not just the token payload: use `Depends(get_current_user)` instead (does the DB lookup + `is_active` check for you) — see `GET /users/me`.
-- Scope-gated (admin-only, etc.): `Depends(require_scopes("scope:name"))` from `auth/dependencies.py` — see the `admin:read` guard on `dlq_router` in `core/dead_letter/router.py`.
+- Scope-gated (admin-only, etc.): `Depends(require_scopes("scope:name"))` from `auth/dependencies.py` — see the `admin:read` guard on `GET /users` in `user/routes/user_router.py` (and, with the `outbox` add-on, the router-level guard on `dlq_router` in `core/dead_letter/router.py`).
 - Refresh-token-only endpoints (e.g. `/refresh`): `locations=["cookies"]`, `type="refresh"`.
 
 ## 4. Error handling

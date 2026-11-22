@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractContextManager, asynccontextmanager, nullcontext
 
 from sqlalchemy.ext.asyncio import (
@@ -70,30 +70,15 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
         yield db
 
 
-AFTER_COMMIT_KEY = "after_commit"
-
-
-def after_commit(db: AsyncSession, callback: Callable[[], Awaitable[object]]) -> None:
-    db.info.setdefault(AFTER_COMMIT_KEY, []).append(callback)
-
-
 @asynccontextmanager
 async def transaction(db: AsyncSession) -> AsyncGenerator[None]:
     try:
         with use_primary(db):
             yield
-            callbacks = db.info.pop(AFTER_COMMIT_KEY, [])
             await db.commit()
     except Exception:
-        db.info.pop(AFTER_COMMIT_KEY, None)
         await db.rollback()
         raise
-
-    for callback in callbacks:
-        try:
-            await callback()
-        except Exception:
-            logger.exception("After-commit callback failed; its work was not done")
 
 
 async def dispose_engines() -> None:

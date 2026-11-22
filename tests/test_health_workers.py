@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 
 from core import health
+from core.outbox.health import outbox_checks
 from core.queue import task_queue
 from main import app
 
@@ -25,11 +26,15 @@ async def test_worker_check_passes_with_a_worker(monkeypatch) -> None:
     await health._check_worker()
 
 
+async def _no_outbox_checks() -> dict:
+    return {}
+
+
 @pytest.fixture
-def base_worker_checks():
-    app.dependency_overrides[health.worker_checks] = health._no_extra_checks
+def worker_only():
+    app.dependency_overrides[outbox_checks] = _no_outbox_checks
     yield
-    app.dependency_overrides.pop(health.worker_checks, None)
+    app.dependency_overrides.pop(outbox_checks, None)
 
 
 def _stub_worker(monkeypatch, *, healthy: bool) -> None:
@@ -43,7 +48,7 @@ def _stub_worker(monkeypatch, *, healthy: bool) -> None:
 
 
 async def test_workers_endpoint_ok(
-    client: AsyncClient, monkeypatch, base_worker_checks
+    client: AsyncClient, monkeypatch, worker_only
 ) -> None:
     _stub_worker(monkeypatch, healthy=True)
 
@@ -54,7 +59,7 @@ async def test_workers_endpoint_ok(
 
 
 async def test_workers_endpoint_503_names_failing_check(
-    client: AsyncClient, monkeypatch, base_worker_checks
+    client: AsyncClient, monkeypatch, worker_only
 ) -> None:
     _stub_worker(monkeypatch, healthy=False)
 

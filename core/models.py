@@ -9,7 +9,7 @@ from core.database import Base  # noqa: F401
 
 # % if outbox
 from core.dead_letter.model import DeadLetterJobModel  # noqa: F401
-from core.outbox.model import OutboxEvent  # noqa: F401
 
 # % endif
+from core.outbox.model import OutboxEvent  # noqa: F401
 from user.models import UserModel  # noqa: F401

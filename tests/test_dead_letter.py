@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from saq import Worker
 from saq.job import Job, Status
 from sqlalchemy import func, select
 
@@ -12,10 +13,13 @@ from core.dead_letter.hook import record_dead_letter, record_dead_letter_job
 from core.dead_letter.model import DeadLetterJobModel
 from core.dead_letter.repository import DeadLetterJobRepository
 from core.dead_letter.service import DeadLetterJobService
+from core.dead_letter.settings import get_dead_letter_settings
+from core.dead_letter.tasks import cleanup_dead_letter_task
 from core.exception import BadRequestError, ConflictError, EntityNotFoundError
 from core.outbox import relay
 from core.outbox.model import OutboxEvent
 from core.outbox.repository import OutboxRepository
+from core.worker.main import settings as worker_settings
 
 DLQ_URL = "/api/admin/tasks/dlq"
 
@@ -426,3 +430,43 @@ async def test_router_get_and_delete_single(client, db) -> None:
 
     again = await client.delete(f"{DLQ_URL}/{row.id}", headers=headers)
     assert again.status_code == 404
+
+
+async def test_cleanup_dead_letter_task_deletes_only_retried_rows_past_retention(
+    db,
+) -> None:
+    past_retention = datetime.now(UTC) - timedelta(
+        days=get_dead_letter_settings().retention_days + 1
+    )
+
+    def _job(*, retried_at: datetime | None) -> DeadLetterJobModel:
+        return DeadLetterJobModel(
+            job_key=f"job-{uuid4().hex[:8]}",
+            function="send_email_task",
+            queue_name="default",
+            kwargs={},
+            status="failed",
+            error="boom",
+            attempts=3,
+            failed_at=past_retention,
+            retried_at=retried_at,
+        )
+
+    old_retried = _job(retried_at=past_retention)
+    old_unretried = _job(retried_at=None)
+    db.add_all([old_retried, old_unretried])
+    await db.flush()
+
+    result = await cleanup_dead_letter_task(ctx={})
+
+    remaining = set((await db.scalars(select(DeadLetterJobModel.id))).all())
+    assert result == {"status": "completed", "deleted": 1}
+    assert old_retried.id not in remaining
+    assert old_unretried.id in remaining
+
+
+async def test_worker_settings_register_the_dead_letter_hook_and_cleanup() -> None:
+    worker = Worker(**worker_settings)
+
+    assert "cleanup_dead_letter_task" in worker.functions
+    assert worker_settings["after_process"] is record_dead_letter

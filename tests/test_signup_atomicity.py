@@ -10,9 +10,9 @@ back except /resend-verification. Both writes now share one transaction.
 import pytest
 from sqlalchemy import select
 
-from core import deferred_tasks
 from core.exception import ConflictError
 from core.factories.user_factory import make_email
+from core.outbox.repository import OutboxRepository
 from user.models import UserModel
 from user.repositories.user_repository import UserRepository
 
@@ -32,12 +32,8 @@ def _disable_rate_limit():
     limiter.enabled = previous
 
 
-class _FailingStager:
-    def __init__(self, db) -> None:
-        self.db = db
-
-    async def stage_add(self, task_name, payload) -> None:
-        raise RuntimeError("simulated failure staging the verification email")
+async def _failing_stage_add(self, task_name, payload) -> None:
+    raise RuntimeError("simulated failure staging the verification email")
 
 
 async def _row_for(db, email: str) -> UserModel | None:
@@ -69,7 +65,7 @@ async def test_create_user_leaves_no_row_when_second_write_fails(
     """The whole signup rolls back — no half-created account."""
     email = make_email()
 
-    monkeypatch.setattr(deferred_tasks, "_factory", _FailingStager)
+    monkeypatch.setattr(OutboxRepository, "stage_add", _failing_stage_add)
 
     response = await client.post(
         CREATE_URL,
@@ -91,14 +87,14 @@ async def test_create_user_can_be_retried_after_a_failure(
     """Because nothing persisted, the same email is still free."""
     email = make_email()
 
-    working_factory = deferred_tasks._factory
-    monkeypatch.setattr(deferred_tasks, "_factory", _FailingStager)
-    first = await client.post(
-        CREATE_URL, json={"name": "Retry Me", "email": email, "password": "pw123456"}
-    )
+    with monkeypatch.context() as patch:
+        patch.setattr(OutboxRepository, "stage_add", _failing_stage_add)
+        first = await client.post(
+            CREATE_URL,
+            json={"name": "Retry Me", "email": email, "password": "pw123456"},
+        )
     assert first.status_code == 500
 
-    monkeypatch.setattr(deferred_tasks, "_factory", working_factory)
     second = await client.post(
         CREATE_URL, json={"name": "Retry Me", "email": email, "password": "pw123456"}
     )

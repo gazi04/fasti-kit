@@ -10,7 +10,6 @@ import auth.dependencies as auth_dependencies
 from auth.redis_blocklist import READY_KEY
 
 # % endif
-from core import deferred_tasks
 from core.database import (
     Base,
     dispose_engines,
@@ -59,17 +58,6 @@ async def _reset_token_blocklist():
 
 
 # % endif
-
-
-@pytest.fixture(autouse=True)
-def enqueued(monkeypatch) -> list[dict]:
-    calls: list[dict] = []
-
-    async def _record(task_name: str, *, key: str, **kwargs) -> None:
-        calls.append({"task_name": task_name, "key": key, **kwargs})
-
-    monkeypatch.setattr(deferred_tasks, "enqueue_task", _record)
-    return calls
 
 
 @pytest.fixture(autouse=True)

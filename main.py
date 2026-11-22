@@ -18,7 +18,7 @@ from auth.services.password_hasher import close_password_hasher
 from core.api_versions import v1_router
 from core.database import dispose_engines
 
-# % if outbox
+# % if dead_letter
 from core.dead_letter.router import dlq_router
 
 # % endif
@@ -113,7 +113,7 @@ setup_openapi(app)
 add_pagination(app)
 
 app.include_router(health_router)
-# % if outbox
+# % if dead_letter
 app.include_router(dlq_router)
 # % endif
 app.include_router(v1_router)

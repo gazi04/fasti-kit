@@ -7,7 +7,7 @@ same time keep a clean code.
 from auth.models import RefreshSessionModel, RevokedTokenModel  # noqa: F401
 from core.database import Base  # noqa: F401
 
-# % if outbox
+# % if dead_letter
 from core.dead_letter.model import DeadLetterJobModel  # noqa: F401
 
 # % endif

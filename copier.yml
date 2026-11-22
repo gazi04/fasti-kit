@@ -25,8 +25,8 @@ _exclude:
   - "<% if not bcrypt_pool %>tests/test_password_hasher.py<% endif %>"
   - "<% if not redis_blocklist %>auth/redis_blocklist.py<% endif %>"
   - "<% if not redis_blocklist %>tests/test_redis_blocklist.py<% endif %>"
-  - "<% if not outbox %>core/dead_letter<% endif %>"
-  - "<% if not outbox %>tests/test_dead_letter.py<% endif %>"
+  - "<% if not dead_letter %>core/dead_letter<% endif %>"
+  - "<% if not dead_letter %>tests/test_dead_letter.py<% endif %>"
   - "<% if not read_replica %>core/replica<% endif %>"
   - "<% if not read_replica %>tests/test_replica*.py<% endif %>"
 
@@ -69,14 +69,13 @@ redis_blocklist:
     Cache revoked token ids in Redis, so an authenticated request checks Redis instead
     of the database. Without it, every request reads the revoked_tokens table.
 
-outbox:
+dead_letter:
   type: bool
   default: false
   help: >-
-    Transactional outbox plus a dead-letter queue. Background jobs are written to an
-    outbox table in the same transaction as the business write, a relay in the worker
-    enqueues them, and jobs that exhaust their retries land in a dead-letter table with
-    an admin API. Without it, jobs are enqueued right after the write commits.
+    Dead-letter queue for background jobs. Jobs that exhaust their retries land in a
+    dead_letter_jobs table, with an admin API to list, retry and purge them. Without it,
+    a job that runs out of retries is only logged as failed.
 
 read_replica:
   type: bool

@@ -176,7 +176,7 @@ type = "forbidden"
 source_modules = [
     "*.routes",
     "*.services",
-    # % if outbox
+    # % if dead_letter
     "core.dead_letter.router",
     "core.dead_letter.service",
     # % endif
@@ -190,7 +190,7 @@ type = "forbidden"
 source_modules = [
     "*.services",
     "*.repositories",
-    # % if outbox
+    # % if dead_letter
     "core.dead_letter.service",
     "core.dead_letter.repository",
     # % endif

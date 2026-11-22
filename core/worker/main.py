@@ -5,7 +5,7 @@ from saq import CronJob
 
 from core.database import dispose_engines
 
-# % if outbox
+# % if dead_letter
 from core.dead_letter.hook import record_dead_letter
 from core.dead_letter.tasks import cleanup_dead_letter_task
 
@@ -53,7 +53,7 @@ settings = {
         CronJob(cleanup_revoked_tokens_task, cron="0 3 * * *"),
         CronJob(cleanup_refresh_sessions_task, cron="15 3 * * *"),
         CronJob(cleanup_outbox_task, cron="30 3 * * *"),
-        # % if outbox
+        # % if dead_letter
         CronJob(cleanup_dead_letter_task, cron="0 4 * * *"),
         # % endif
     ],
@@ -61,7 +61,7 @@ settings = {
     "shutdown": _release_pools,
     "before_process": _bind_job_correlation_id,
     "startup": _start_relay,
-    # % if outbox
+    # % if dead_letter
     "after_process": record_dead_letter,
     # % endif
 }
